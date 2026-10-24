@@ -2776,10 +2776,14 @@ function mediaCommand(command) {
   if (action === "play" && typeof command.startAt === "number" && Math.abs(video.currentTime - command.startAt) > 0.5) {
     seek(command.startAt);
   }
-  if (action === "pause") video.pause();
+  if (action === "pause") {
+    request("media-pause-request");
+    video.pause();
+  }
   if (action === "seek") seek(video.currentTime + command.seconds);
   if (action === "play") {
     try {
+      request("media-play-request");
       return Promise.resolve(video.play()).then(snapshot, function (error) {
         return {
           error: error.name + ": " + error.message
