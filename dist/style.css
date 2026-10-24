@@ -1,0 +1,702 @@
+/* ==========================================================================
+   LuminaTV - Flat Modern TV UI Theme (Day & Night Mode)
+   ========================================================================== */
+
+:root {
+  /* Day Theme (Default - Bright, Fresh, White & Blues) */
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f1f5f9;
+  --bg-modal: rgba(255, 255, 255, 0.98);
+  --bg-overlay: rgba(15, 23, 42, 0.6);
+  --bg-hud: rgba(255, 255, 255, 0.94);
+  
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --text-inverted: #ffffff;
+
+  --accent-primary: #0284c7;     /* Vibrant Sky Blue */
+  --accent-secondary: #2563eb;   /* Deep Royal Blue */
+  --accent-light: #e0f2fe;       /* Soft Light Blue Tint */
+  --accent-border: #bae6fd;
+  --focus-glow: rgba(2, 132, 199, 0.35);
+
+  --border-subtle: #e2e8f0;
+  --progress-track: #e2e8f0;
+  --progress-fill: #0284c7;
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-pill: 9999px;
+
+  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --shadow-card: 0 4px 14px rgba(15, 23, 42, 0.06);
+  --shadow-focused: 0 12px 28px rgba(2, 132, 199, 0.25);
+}
+
+[data-theme="night"] {
+  /* Night Theme (Sleek Midnight Navy & Electric Cyan) */
+  --bg-primary: #070b14;
+  --bg-secondary: #0f172a;
+  --bg-card: #131d35;
+  --bg-card-hover: #1e294b;
+  --bg-modal: rgba(15, 23, 42, 0.98);
+  --bg-overlay: rgba(0, 0, 0, 0.85);
+  --bg-hud: rgba(11, 15, 25, 0.92);
+
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-inverted: #070b14;
+
+  --accent-primary: #38bdf8;     /* Glowing Cyan */
+  --accent-secondary: #60a5fa;   /* Bright Blue */
+  --accent-light: rgba(56, 189, 248, 0.15);
+  --accent-border: rgba(56, 189, 248, 0.4);
+  --focus-glow: rgba(56, 189, 248, 0.45);
+
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --progress-track: rgba(255, 255, 255, 0.15);
+  --progress-fill: #38bdf8;
+
+  --shadow-card: 0 6px 18px rgba(0, 0, 0, 0.45);
+  --shadow-focused: 0 14px 34px rgba(56, 189, 248, 0.35);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-main);
+  font-family: var(--font-family);
+  overflow-x: hidden;
+  overflow-y: auto;
+  min-height: 100vh;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ==========================================================================
+   Focus & Spatial Navigation Style (Crucial for TV Remote D-Pad)
+   ========================================================================== */
+.focusable {
+  outline: none;
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.2s ease,
+              background-color 0.2s ease;
+}
+
+.focusable.focused,
+.focusable:focus-visible {
+  transform: scale(1.05);
+  box-shadow: 0 0 0 3.5px var(--accent-primary), var(--shadow-focused);
+  z-index: 10;
+}
+
+button.focusable.focused {
+  background-color: var(--accent-primary) !important;
+  color: #ffffff !important;
+}
+
+button.focusable.focused svg {
+  stroke: #ffffff !important;
+}
+
+/* ==========================================================================
+   Header & Navigation Bar
+   ========================================================================== */
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 3.5rem;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 2.5rem;
+}
+
+.brand-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: var(--text-main);
+}
+
+.brand-logo svg {
+  color: var(--accent-primary);
+}
+
+.brand-logo span {
+  color: var(--accent-primary);
+}
+
+.nav-links {
+  display: flex;
+  gap: 0.85rem;
+}
+
+.nav-btn {
+  padding: 0.6rem 1.2rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+  background-color: transparent;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.nav-btn.active {
+  background-color: var(--accent-light);
+  color: var(--accent-primary);
+  border-color: var(--accent-border);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.icon-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--border-subtle);
+  background-color: var(--bg-card);
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ==========================================================================
+   Hero Featured Banner
+   ========================================================================== */
+.hero-banner {
+  position: relative;
+  margin: 1.75rem 3.5rem 2.5rem;
+  height: 420px;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+  background-color: var(--bg-card);
+}
+
+.hero-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, 
+    var(--bg-primary) 0%, 
+    rgba(248, 250, 252, 0.85) 45%, 
+    rgba(248, 250, 252, 0) 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 3rem 4rem;
+  max-width: 60%;
+}
+
+[data-theme="night"] .hero-overlay {
+  background: linear-gradient(90deg, 
+    var(--bg-primary) 0%, 
+    rgba(7, 11, 20, 0.90) 50%, 
+    rgba(7, 11, 20, 0) 100%);
+}
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.85rem;
+  border-radius: var(--radius-pill);
+  background-color: var(--accent-light);
+  color: var(--accent-primary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  margin-bottom: 0.75rem;
+  width: fit-content;
+}
+
+.hero-title {
+  font-size: 2.4rem;
+  font-weight: 800;
+  line-height: 1.15;
+  margin-bottom: 0.65rem;
+}
+
+.hero-meta {
+  display: flex;
+  gap: 1.25rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 0.85rem;
+}
+
+.hero-desc {
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: 1.5rem;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 1rem;
+}
+
+.btn-primary {
+  padding: 0.75rem 1.6rem;
+  border-radius: var(--radius-pill);
+  border: none;
+  background-color: var(--accent-primary);
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-secondary {
+  padding: 0.75rem 1.5rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-subtle);
+  background-color: var(--bg-card);
+  color: var(--text-main);
+  font-size: 1rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* ==========================================================================
+   Content Rows & Carousels
+   ========================================================================== */
+.content-row {
+  margin-bottom: 2.75rem;
+  padding: 0 3.5rem;
+}
+
+.row-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.15rem;
+}
+
+.row-title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.row-carousel {
+  display: flex;
+  gap: 1.35rem;
+  overflow-x: auto;
+  padding: 0.85rem 0.25rem 1.5rem;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+}
+
+.row-carousel::-webkit-scrollbar {
+  display: none;
+}
+
+/* ==========================================================================
+   Cards (Movies, Shows, Continue Watching)
+   ========================================================================== */
+.media-card {
+  flex: 0 0 190px;
+  border-radius: var(--radius-md);
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+  position: relative;
+}
+
+.media-poster-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  background-color: var(--bg-card-hover);
+  overflow: hidden;
+}
+
+.media-poster {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.card-rating {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(4px);
+  color: #facc15;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: var(--radius-pill);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.card-info {
+  padding: 0.85rem 0.95rem;
+}
+
+.card-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 0.35rem;
+}
+
+.card-sub {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Continue Watching Progress Bar */
+.progress-bar-wrap {
+  width: 100%;
+  height: 4px;
+  background-color: var(--progress-track);
+  position: absolute;
+  bottom: 0;
+  left: 0;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background-color: var(--progress-fill);
+  transition: width 0.3s ease;
+}
+
+/* ==========================================================================
+   Full-Screen Native Video Player & OSD
+   ========================================================================== */
+.player-container {
+  position: fixed;
+  inset: 0;
+  background-color: #000000;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.player-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.player-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+.player-hud {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 2.5rem 3.5rem;
+  background: linear-gradient(180deg, 
+    rgba(0, 0, 0, 0.8) 0%, 
+    rgba(0, 0, 0, 0) 25%, 
+    rgba(0, 0, 0, 0) 65%, 
+    rgba(0, 0, 0, 0.9) 100%);
+  color: #ffffff;
+  transition: opacity 0.3s ease;
+  pointer-events: auto;
+}
+
+.player-hud.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.hud-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.hud-title h2 {
+  font-size: 1.75rem;
+  font-weight: 800;
+  margin-bottom: 0.25rem;
+}
+
+.hud-title p {
+  color: #cbd5e1;
+  font-size: 0.95rem;
+  font-weight: 500;
+}
+
+.hud-top-right {
+  display: flex;
+  gap: 1rem;
+}
+
+.hud-bottom {
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+}
+
+/* Timeline & Scrubbing */
+.timeline-row {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.timeline-bar {
+  flex: 1;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background-color: rgba(255, 255, 255, 0.25);
+  position: relative;
+  cursor: pointer;
+}
+
+.timeline-filled {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background-color: var(--accent-primary);
+  position: relative;
+}
+
+.timeline-thumb {
+  position: absolute;
+  right: -6px;
+  top: -4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: #ffffff;
+  box-shadow: 0 0 8px rgba(0,0,0,0.5);
+}
+
+.hud-controls-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.hud-buttons-center {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  margin: 0 auto;
+}
+
+.hud-btn-main {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  border: none;
+  background-color: #ffffff;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hud-btn-sec {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background-color: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ==========================================================================
+   Virtual Mouse Cursor Pointer (For fallback iframes)
+   ========================================================================== */
+#virtual-cursor {
+  position: fixed;
+  width: 28px;
+  height: 28px;
+  pointer-events: none;
+  z-index: 9999;
+  display: none;
+  transform: translate(-50%, -50%);
+  transition: transform 0.05s linear;
+}
+
+#virtual-cursor .cursor-circle {
+  width: 100%;
+  height: 100%;
+  border: 3px solid #ffffff;
+  background-color: rgba(2, 132, 199, 0.7);
+  border-radius: 50%;
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+#virtual-cursor.clicking .cursor-circle {
+  transform: scale(0.75);
+  background-color: #facc15;
+}
+
+/* ==========================================================================
+   Modals (Details, Search, Settings)
+   ========================================================================== */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: var(--bg-overlay);
+  backdrop-filter: blur(10px);
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.modal-content {
+  background-color: var(--bg-modal);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.3);
+  max-width: 900px;
+  width: 92%;
+  max-height: 88vh;
+  overflow-y: auto;
+  padding: 2.5rem;
+  position: relative;
+}
+
+.modal-close-btn {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 2.25rem;
+}
+
+.details-poster {
+  width: 100%;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-card);
+}
+
+.details-meta-row {
+  display: flex;
+  gap: 1.25rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--accent-primary);
+  margin-bottom: 1rem;
+}
+
+.episode-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.episode-card {
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  padding: 0.75rem;
+  text-align: left;
+}
+
+.episode-card h4 {
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.toast {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  padding: 0.85rem 1.75rem;
+  border-radius: var(--radius-pill);
+  background-color: var(--accent-primary);
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+  z-index: 200;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
