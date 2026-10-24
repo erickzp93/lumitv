@@ -12,13 +12,16 @@ const REMOTE_LOGGER_URL = 'http://192.168.0.8:9999/log';
 
 const Debugger = {
   enabled: false,
+  ready: false,
   logs: [],
   maxLogs: 50,
 
   init() {
+    this.ready = true;
     this.hookConsole();
     this.hookErrors();
-    this.info('LuminaTV iniciada. UA: ' + navigator.userAgent);
+    this.info('LuminaTV v1.0.4 iniciada en TV. UA: ' + (typeof navigator !== 'undefined' ? navigator.userAgent : 'N/A'));
+    this.flushQueuedLogs();
   },
 
   log(category, message, data = null) {
@@ -27,7 +30,9 @@ const Debugger = {
     this.logs.push(logItem);
     if (this.logs.length > this.maxLogs) this.logs.shift();
 
-    this.renderLog(logItem);
+    if (this.ready) {
+      this.renderLog(logItem);
+    }
     this.sendRemote(logItem);
   },
 
@@ -37,34 +42,55 @@ const Debugger = {
   net(msg, data) { this.log('net', msg, data); },
   msg(msg, data) { this.log('msg', msg, data); },
 
-  renderLog(item) {
+  flushQueuedLogs() {
+    if (!this.ready) return;
     const container = document.getElementById('debug-logs-container');
     if (!container) return;
-    const el = document.createElement('div');
-    el.className = `debug-log-line log-${item.category}`;
-    el.textContent = `[${item.time}] [${item.category.toUpperCase()}] ${item.message}${item.data ? ' ' + (typeof item.data === 'object' ? JSON.stringify(item.data) : item.data) : ''}`;
-    container.appendChild(el);
-    container.scrollTop = container.scrollHeight;
-    this.updateStatusBar();
+    container.innerHTML = '';
+    this.logs.forEach(item => this.renderLog(item));
+  },
+
+  renderLog(item) {
+    try {
+      const container = document.getElementById('debug-logs-container');
+      if (!container) return;
+      const el = document.createElement('div');
+      el.className = `debug-log-line log-${item.category}`;
+      el.textContent = `[${item.time}] [${item.category.toUpperCase()}] ${item.message}${item.data ? ' ' + (typeof item.data === 'object' ? JSON.stringify(item.data) : item.data) : ''}`;
+      container.appendChild(el);
+      container.scrollTop = container.scrollHeight;
+      this.updateStatusBar();
+    } catch (e) {}
   },
 
   updateStatusBar() {
+    if (!this.ready) return;
     const bar = document.getElementById('debug-status-bar');
     if (!bar) return;
-    const srv = (typeof STREAM_SERVERS !== 'undefined' && STREAM_SERVERS[State.activeServerIndex]) 
-      ? STREAM_SERVERS[State.activeServerIndex].name 
-      : 'N/A';
-    const media = State.currentMedia ? (State.currentMedia.title || State.currentMedia.name) : 'Ninguno';
-    bar.textContent = `Vista: ${State.currentView} | Media: ${media} | Servidor: ${srv} | Tiempo: ${formatTime(State.currentTime)}/${formatTime(State.duration)} | Play: ${State.isPlaying}`;
+    try {
+      const srv = (typeof STREAM_SERVERS !== 'undefined' && typeof State !== 'undefined' && STREAM_SERVERS[State.activeServerIndex]) 
+        ? STREAM_SERVERS[State.activeServerIndex].name 
+        : 'N/A';
+      const media = (typeof State !== 'undefined' && State.currentMedia) 
+        ? (State.currentMedia.title || State.currentMedia.name) 
+        : 'Ninguno';
+      const cur = (typeof formatTime === 'function' && typeof State !== 'undefined') ? formatTime(State.currentTime) : '00:00';
+      const dur = (typeof formatTime === 'function' && typeof State !== 'undefined') ? formatTime(State.duration) : '00:00';
+      const isPlay = (typeof State !== 'undefined') ? State.isPlaying : false;
+      const curView = (typeof State !== 'undefined') ? State.currentView : 'home';
+      bar.textContent = `Vista: ${curView} | Media: ${media} | Servidor: ${srv} | Tiempo: ${cur}/${dur} | Play: ${isPlay}`;
+    } catch (e) {}
   },
 
   sendRemote(item) {
     try {
-      fetch(REMOTE_LOGGER_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(item)
-      }).catch(() => {});
+      if (typeof fetch === 'function') {
+        fetch(REMOTE_LOGGER_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(item)
+        }).catch(() => {});
+      }
     } catch (e) {}
   },
 
@@ -107,16 +133,16 @@ const Debugger = {
   },
 
   hookErrors() {
-    window.addEventListener('error', (e) => {
-      this.error(`Error no controlado: ${e.message} at ${e.filename}:${e.lineno}`);
-    });
-    window.addEventListener('unhandledrejection', (e) => {
-      this.error(`Promesa rechazada: ${e.reason}`);
-    });
+    if (typeof window !== 'undefined') {
+      window.addEventListener('error', (e) => {
+        this.error(`Error no controlado: ${e.message} at ${e.filename}:${e.lineno}`);
+      });
+      window.addEventListener('unhandledrejection', (e) => {
+        this.error(`Promesa rechazada: ${e.reason}`);
+      });
+    }
   }
 };
-
-Debugger.init();
 
 // ============================================================================
 // Configuración & Constantes
@@ -508,9 +534,9 @@ async function loadInitialData() {
   }
 
   // Filas
-  renderCarousel('carousel-trending-movies', trendingMovies ? trendingMovies.results.slice(1, 15) : [], 'movie');
-  renderCarousel('carousel-popular-series', popularSeries ? popularSeries.results.slice(0, 15) : [], 'tv');
-  renderCarousel('carousel-top-rated', topRated ? topRated.results.slice(0, 15) : [], 'movie');
+  renderCarousel('carousel-trending-movies', (trendingMovies && trendingMovies.results) ? trendingMovies.results.slice(1, 15) : [], 'movie');
+  renderCarousel('carousel-popular-series', (popularSeries && popularSeries.results) ? popularSeries.results.slice(0, 15) : [], 'tv');
+  renderCarousel('carousel-top-rated', (topRated && topRated.results) ? topRated.results.slice(0, 15) : [], 'movie');
 
   renderContinueWatching();
   setFocus(document.getElementById('hero-play-btn'));
@@ -1065,6 +1091,7 @@ document.addEventListener('keydown', (e) => {
 // Inicialización General
 // ============================================================================
 window.addEventListener('DOMContentLoaded', () => {
+  Debugger.init();
   initTheme();
   loadInitialData();
 
