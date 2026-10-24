@@ -2754,6 +2754,26 @@ function mediaCommand(command) {
       error: video.error ? video.error.message || "MEDIA_ERROR_" + video.error.code : null
     };
   }
+  function pauseAt(time) {
+    request("media-pause-request");
+    video.pause();
+    return new Promise(function (resolve) {
+      var attempts = 0;
+      function confirm() {
+        video = document.querySelector("video");
+        player = document.querySelector("[data-media-player]");
+        if (video && video.readyState >= 1 && video.duration > 0) {
+          if (!video.paused) video.pause();
+          if (Math.abs(video.currentTime - time) > 0.3) seek(time);else if (video.paused) return resolve(snapshot());
+        }
+        if (++attempts >= 40) return resolve({
+          error: "PAUSE_NOT_CONFIRMED"
+        });
+        setTimeout(confirm, 200);
+      }
+      setTimeout(confirm, 400);
+    });
+  }
   if (command.action === "click") {
     var element = document.elementFromPoint(command.x, command.y);
     if (element && typeof element.click === "function") element.click();
@@ -2773,10 +2793,7 @@ function mediaCommand(command) {
   if (action === "play" && typeof command.startAt === "number" && Math.abs(video.currentTime - command.startAt) > 0.5) {
     seek(command.startAt);
   }
-  if (action === "pause") {
-    request("media-pause-request");
-    video.pause();
-  }
+  if (action === "pause") return pauseAt(video.currentTime);
   if (action === "seek") seek(video.currentTime + command.seconds);
   if (action === "play") {
     try {

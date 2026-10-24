@@ -7,7 +7,7 @@ process.env.LUMINA_TEST = '1';
 const service = require('../src/service.js');
 
 function media(video) {
-  const context = vm.createContext({document:{querySelector:selector=>selector==='video'?video:null}, Promise, isFinite});
+  const context = vm.createContext({document:{querySelector:selector=>selector==='video'?video:null}, Promise, isFinite, setTimeout});
   return command => vm.runInContext(`(${service.mediaCommand.toString()})(${JSON.stringify(command)})`, context);
 }
 function video() {
@@ -42,6 +42,12 @@ test('pause, toggle and seeking operate on the actual video with bounds',async()
   await command({action:'pause'});assert.equal(v.paused,true);
   await command({action:'seek',seconds:-10});assert.equal(v.currentTime,0);
   await command({action:'seek',seconds:500});assert.equal(v.currentTime,119.9);
+});
+test('pause preserves the observed position when a provider resets its source',async()=>{
+  const v=video();v.currentTime=30;v.paused=false;
+  v.pause=function(){this.paused=true;this.currentTime=0;};
+  const result=await media(v)({action:'pause'});
+  assert.equal(result.paused,true);assert.equal(result.currentTime,30);
 });
 test('Vidstack seeking uses its provider request event rather than resetting DASH state',async()=>{
   const v=video(), events=[];
