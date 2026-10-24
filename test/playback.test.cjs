@@ -56,6 +56,11 @@ test('missing videos and rejected play promises never report successful playback
   const v=video();v.play=()=>Promise.reject(new Error('decoder failure'));
   assert.match((await media(v)({action:'play'})).error,/decoder failure/);assert.equal(v.paused,true);
 });
+test('play waits for buffering after a seek rather than requiring a second button press',async()=>{
+  const v=video();v.readyState=1;
+  const result=await media(v)({action:'play'});
+  assert.equal(result.paused,false);
+});
 test('service discovers only this module and parses listening rather than established sockets',()=>{
   assert.equal(service.isLuminaPage('http://127.0.0.1:8081/module/gh%2Ferickzp93%2Flumitv/dist/index.html'),true);
   assert.equal(service.isLuminaPage('http://127.0.0.1:8081/module/gh%2Ferickzp93%2Flumitv@v1.1.0/dist/index.html'),true);
@@ -104,4 +109,27 @@ test('native Tizen Back removes the external frame before host forwarding and re
   assert.equal(run('State.currentView'),'home');assert.notEqual(w.document.getElementById('player-iframe'),old);
   assert.equal(w.document.getElementById('player-iframe').hasAttribute('src'),false);
   assert.equal(w.document.activeElement.id,'hero-play-btn');
+});
+test('service rejects commands from iframe contexts and commands outside its allowlist',async()=>{
+  const calls=[];
+  const context=vm.createContext({require,module:{exports:{}},process:{env:{LUMINA_TEST:'1'}},console,
+    setTimeout,clearTimeout,setInterval,clearInterval,calls});
+  vm.runInContext(fs.readFileSync('src/service.js','utf8'),context);
+  vm.runInContext(`mainContext=42;execute=function(command){calls.push(command);return Promise.resolve({session:command.session,snapshot:{}})};sendToApp=function(){return Promise.resolve()}`,context);
+  const invoke=(executionContextId,command)=>vm.runInContext(`onBinding(${JSON.stringify({name:'__luminaNative',executionContextId,payload:JSON.stringify(command)})})`,context);
+  invoke(99,{id:1,session:1,action:'play'});
+  invoke(42,{id:2,session:1,action:'eval',expression:'arbitrary code'});
+  invoke(42,{id:3,session:1,action:'seek',seconds:'10'});
+  invoke(42,{id:4,session:1,action:'play',volume:-1});
+  invoke(42,{id:5,session:1,action:'play',volume:0.5});
+  await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(calls.length,1);assert.equal(calls[0].id,5);
+});
+test('series telemetry cannot overwrite another episode',t=>{
+  const {run,w}=app(t);run(`openPlayer({id:123,media_type:'tv',name:'Series'},0,1,2)`);
+  const frame=w.document.getElementById('player-iframe');
+  const emit=episode=>w.dispatchEvent(new w.MessageEvent('message',{origin:'https://vidlink.pro',source:frame.contentWindow,
+    data:{type:'PLAYER_EVENT',data:{mtmdbId:123,season:1,episode,event:'pause',currentTime:42,duration:120}}}));
+  emit(1);assert.equal(run('State.currentTime'),0);
+  emit(2);assert.equal(run('State.history[0].episode'),2);assert.equal(run('State.history[0].currentTime'),42);
 });

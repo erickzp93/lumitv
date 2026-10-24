@@ -9,7 +9,7 @@
   "serviceFile": "dist/service.js",
   "scripts": {
     "build": "node scripts/build-service.js",
-    "test": "node --test test/*.test.cjs"
+    "test": "node --test"
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",

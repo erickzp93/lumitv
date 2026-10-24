@@ -96,7 +96,6 @@ function mediaCommand(command) {
   if (!video || (command.action !== 'status' && video.readyState === 0)) return Promise.resolve({error:'VIDEO_NOT_READY'});
   var action = command.action;
   if (action === 'toggle') action = video.paused ? 'play' : 'pause';
-  if (action === 'play' && video.readyState < 2) return Promise.resolve({error:'VIDEO_NOT_READY'});
   if (action === 'play' || action === 'unmute') {
     var volume = typeof command.volume === 'number' ? Math.max(0, Math.min(1, command.volume)) : 0.5;
     video.muted = false;
