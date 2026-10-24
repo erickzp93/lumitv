@@ -449,6 +449,7 @@ function renderCarousel(carouselId, items, mediaType) {
 // Modal de Detalles y Selección de Temporadas/Episodios
 // ============================================================================
 async function openDetails(media, highlightResume = false) {
+  State.lastFocusedCard = State.currentFocusedElement;
   State.currentMedia = media;
   State.currentView = 'modal-details';
   const modal = document.getElementById('modal-details');
@@ -542,8 +543,18 @@ async function fetchEpisodes(tvId, seasonNumber) {
 
 function closeDetails() {
   document.getElementById('modal-details').style.display = 'none';
-  State.currentView = 'home';
-  setFocus(document.getElementById('hero-play-btn'));
+  const modalSearch = document.getElementById('modal-search');
+  if (modalSearch && modalSearch.style.display === 'flex') {
+    State.currentView = 'modal-search';
+    setFocus(document.getElementById('search-input'));
+  } else {
+    State.currentView = 'home';
+    if (State.lastFocusedCard && document.body.contains(State.lastFocusedCard)) {
+      setFocus(State.lastFocusedCard);
+    } else {
+      setFocus(document.getElementById('hero-play-btn'));
+    }
+  }
 }
 
 // ============================================================================
@@ -647,8 +658,38 @@ function closePlayer() {
   
   if (State.virtualCursorActive) toggleVirtualCursor();
   
+  // Si el modal de detalles estaba abierto, devolver el foco y el estado al modal
+  const modalDetails = document.getElementById('modal-details');
+  if (modalDetails && modalDetails.style.display === 'flex') {
+    State.currentView = 'modal-details';
+    
+    // Actualizar botón de reanudar por si avanzó la reproducción
+    if (State.currentMedia) {
+      const saved = getSavedProgress(State.currentMedia.id);
+      const resumeBtn = document.getElementById('btn-details-resume');
+      if (saved && saved.currentTime > 15 && resumeBtn) {
+        resumeBtn.style.display = 'flex';
+        document.getElementById('resume-time-label').textContent = formatTime(saved.currentTime);
+        resumeBtn.onclick = () => openPlayer(State.currentMedia, saved.currentTime, saved.season, saved.episode);
+        setFocus(resumeBtn);
+        return;
+      }
+    }
+    
+    const playBtn = document.getElementById('btn-details-play');
+    if (playBtn) {
+      setFocus(playBtn);
+      return;
+    }
+  }
+
+  // De lo contrario, regresar al inicio
   State.currentView = 'home';
-  setFocus(document.getElementById('hero-play-btn'));
+  if (State.lastFocusedCard && document.body.contains(State.lastFocusedCard)) {
+    setFocus(State.lastFocusedCard);
+  } else {
+    setFocus(document.getElementById('hero-play-btn'));
+  }
 }
 
 function cycleServer() {
