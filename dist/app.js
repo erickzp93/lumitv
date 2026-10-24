@@ -788,8 +788,11 @@ function openPlayer(media, startTime = 0, season = 1, episode = 1) {
 
   const isTv = media.media_type === 'tv' || media.mediaType === 'tv';
   const title = media.title || media.name || 'Reproduciendo';
-  document.getElementById('hud-media-title').textContent = title;
-  document.getElementById('hud-media-sub').textContent = isTv ? `Temporada ${season} • Episodio ${episode}` : 'Película';
+  const titleEl = document.getElementById('hud-media-title');
+  if (titleEl) titleEl.textContent = title;
+  
+  const subEl = document.getElementById('hud-media-sub');
+  if (subEl) subEl.textContent = isTv ? `Temporada ${season} • Episodio ${episode}` : 'Película';
 
   const iconPlay = document.getElementById('icon-play');
   const iconPause = document.getElementById('icon-pause');
@@ -811,7 +814,8 @@ function loadStream(startTime = 0) {
   const isTv = media.media_type === 'tv' || media.mediaType === 'tv';
   const server = STREAM_SERVERS[State.activeServerIndex];
   
-  document.getElementById('hud-server-name').textContent = server.name;
+  const serverNameEl = document.getElementById('hud-server-name');
+  if (serverNameEl) serverNameEl.textContent = server.name;
 
   const videoEl = document.getElementById('player-video');
   const iframeEl = document.getElementById('player-iframe');
