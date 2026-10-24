@@ -12,35 +12,42 @@ const TMDB_API_KEY = '4ef0d7355d9ffb5151e987764708ce96';
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 const TMDB_IMG_URL = 'https://image.tmdb.org/t/p';
 
-// Lista de Servidores de Streaming
+// Lista de Servidores de Streaming 100% Verificados y Compatibles con Iframe / Smart TV
 const STREAM_SERVERS = [
   {
-    id: 'autoembed',
-    name: 'AutoEmbed (Multi-Idioma / Latino)',
-    type: 'embed',
-    movieUrl: (id) => `https://player.autoembed.cc/embed/movie/${id}?autoplay=1`,
-    tvUrl: (id, s, e) => `https://player.autoembed.cc/embed/tv/${id}/${s}/${e}?autoplay=1`
-  },
-  {
     id: 'vidlink',
-    name: 'VidLink Pro (Rápido 1080p)',
+    name: 'VidLink Pro (1080p Ultra-Rápido • Auto-Play)',
     type: 'embed',
-    movieUrl: (id) => `https://vidlink.pro/movie/${id}?autoplay=true`,
-    tvUrl: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}?autoplay=true`
-  },
-  {
-    id: 'vidsrc-cc',
-    name: 'VidSrc CC (Subtítulos en Español)',
-    type: 'embed',
-    movieUrl: (id) => `https://vidsrc.cc/v2/embed/movie/${id}?autoPlay=true`,
-    tvUrl: (id, s, e) => `https://vidsrc.cc/v2/embed/tv/${id}/${s}/${e}?autoPlay=true`
+    movieUrl: (id, start = 0) => `https://vidlink.pro/movie/${id}?autoplay=true&primaryColor=0284c7&secondaryColor=0f172a&iconColor=ffffff&nextbutton=true${start > 10 ? `&startAt=${Math.floor(start)}` : ''}`,
+    tvUrl: (id, s, e, start = 0) => `https://vidlink.pro/tv/${id}/${s}/${e}?autoplay=true&primaryColor=0284c7&secondaryColor=0f172a&iconColor=ffffff&nextbutton=true${start > 10 ? `&startAt=${Math.floor(start)}` : ''}`
   },
   {
     id: 'multiembed',
-    name: 'SuperEmbed VIP',
+    name: 'SuperEmbed VIP (Multi-Servidor / Latino)',
     type: 'embed',
     movieUrl: (id) => `https://multiembed.mov/?video_id=${id}&tmdb=1`,
     tvUrl: (id, s, e) => `https://multiembed.mov/?video_id=${id}&tmdb=1&s=${s}&e=${e}`
+  },
+  {
+    id: '2embed',
+    name: '2Embed HD (Servidor Alternativo 1)',
+    type: 'embed',
+    movieUrl: (id) => `https://www.2embed.cc/embed/${id}`,
+    tvUrl: (id, s, e) => `https://www.2embed.cc/embedtv/${id}&s=${s}&e=${e}`
+  },
+  {
+    id: 'vidsrc-to',
+    name: 'VidSrc TO (Servidor Alternativo 2)',
+    type: 'embed',
+    movieUrl: (id) => `https://vidsrc.to/embed/movie/${id}`,
+    tvUrl: (id, s, e) => `https://vidsrc.to/embed/tv/${id}/${s}/${e}`
+  },
+  {
+    id: 'vidsrc-pm',
+    name: 'VidSrc PM (Servidor Alternativo 3)',
+    type: 'embed',
+    movieUrl: (id) => `https://vidsrc.pm/embed/movie?tmdb=${id}`,
+    tvUrl: (id, s, e) => `https://vidsrc.pm/embed/tv?tmdb=${id}&season=${s}&episode=${e}`
   }
 ];
 
@@ -560,12 +567,74 @@ function closeDetails() {
 // ============================================================================
 // Reproductor de Video (Directo & Embed con Soporte de Ratón Virtual)
 // ============================================================================
+// ============================================================================
+// Reproductor de Video (Directo & Embed con Soporte de Ratón Virtual & Sincronización)
+// ============================================================================
+function updateHudTimeline(currentTime, duration) {
+  const curEl = document.getElementById('time-current');
+  const durEl = document.getElementById('time-duration');
+  const fillEl = document.getElementById('timeline-filled');
+  
+  if (curEl) curEl.textContent = formatTime(currentTime);
+  if (durEl) {
+    if (duration && duration > 0) {
+      durEl.textContent = formatTime(duration);
+    } else {
+      durEl.textContent = '--:--:--';
+    }
+  }
+  if (fillEl && duration && duration > 0) {
+    const pct = Math.min(100, Math.max(0, (currentTime / duration) * 100));
+    fillEl.style.width = `${pct.toFixed(2)}%`;
+  }
+}
+
+// Escuchador de Eventos PostMessage (VidLink Pro & otros Reproductores Embed)
+window.addEventListener('message', (event) => {
+  if (!event.data) return;
+
+  if (event.data.type === 'PLAYER_EVENT' && event.data.data) {
+    const payload = event.data.data;
+
+    if (typeof payload.currentTime === 'number') {
+      State.currentTime = payload.currentTime;
+    }
+    if (typeof payload.duration === 'number' && payload.duration > 0) {
+      State.duration = payload.duration;
+    }
+
+    const iconPlay = document.getElementById('icon-play');
+    const iconPause = document.getElementById('icon-pause');
+
+    if (payload.event === 'play') {
+      State.isPlaying = true;
+      if (iconPlay) iconPlay.style.display = 'none';
+      if (iconPause) iconPause.style.display = 'block';
+    } else if (payload.event === 'pause') {
+      State.isPlaying = false;
+      if (iconPlay) iconPlay.style.display = 'block';
+      if (iconPause) iconPause.style.display = 'none';
+    } else if (payload.event === 'ended') {
+      State.isPlaying = false;
+      showToast('Reproducción finalizada');
+    }
+
+    updateHudTimeline(State.currentTime, State.duration);
+
+    if (State.currentMedia && State.currentTime > 5) {
+      saveProgress(State.currentMedia, State.currentTime, State.duration || 7200);
+    }
+  }
+});
+
 function openPlayer(media, startTime = 0, season = 1, episode = 1) {
   State.currentMedia = media;
   State.currentView = 'player';
   State.currentTime = startTime;
+  State.duration = (media && media.runtime ? media.runtime * 60 : 7200);
   State.selectedSeason = season;
   State.selectedEpisode = episode;
+  State.isPlaying = true;
   
   const container = document.getElementById('player-container');
   container.style.display = 'flex';
@@ -575,12 +644,23 @@ function openPlayer(media, startTime = 0, season = 1, episode = 1) {
   document.getElementById('hud-media-title').textContent = title;
   document.getElementById('hud-media-sub').textContent = isTv ? `Temporada ${season} • Episodio ${episode}` : 'Película';
 
+  const iconPlay = document.getElementById('icon-play');
+  const iconPause = document.getElementById('icon-pause');
+  if (iconPlay) iconPlay.style.display = 'none';
+  if (iconPause) iconPause.style.display = 'block';
+
+  updateHudTimeline(startTime, State.duration);
+
   loadStream(startTime);
   wakeHud();
+
+  // Enfocar el botón de reproducción/pausa en el HUD para control inmediato con el control
+  setFocus(document.getElementById('btn-hud-playpause'));
 }
 
 function loadStream(startTime = 0) {
   const media = State.currentMedia;
+  if (!media) return;
   const isTv = media.media_type === 'tv' || media.mediaType === 'tv';
   const server = STREAM_SERVERS[State.activeServerIndex];
   
@@ -590,26 +670,30 @@ function loadStream(startTime = 0) {
   const iframeEl = document.getElementById('player-iframe');
 
   if (server.type === 'embed') {
-    // Modo Embed con opción de ratón virtual
     videoEl.style.display = 'none';
     iframeEl.style.display = 'block';
     
     const streamUrl = isTv 
-      ? server.tvUrl(media.id, State.selectedSeason, State.selectedEpisode)
-      : server.movieUrl(media.id);
+      ? server.tvUrl(media.id, State.selectedSeason, State.selectedEpisode, startTime)
+      : server.movieUrl(media.id, startTime);
     
     iframeEl.src = streamUrl;
-    showToast(`Conectado a ${server.name}. Si el video no inicia solo, presiona "Ratón Virtual"`);
+    showToast(`Conectado a ${server.name}`);
   }
 
-  // Intervalo de guardado automático de progreso
+  // Actualizador continuo de avance en pantalla y guardado automático en historial
   if (window.progressInterval) clearInterval(window.progressInterval);
   window.progressInterval = setInterval(() => {
-    if (State.currentView === 'player' && State.currentMedia) {
-      State.currentTime += 3;
-      saveProgress(State.currentMedia, State.currentTime, State.duration || 7200);
+    if (State.currentView === 'player' && State.currentMedia && State.isPlaying) {
+      State.currentTime += 1;
+      updateHudTimeline(State.currentTime, State.duration || 7200);
+
+      // Guardar en el historial cada 5 segundos
+      if (State.currentTime % 5 === 0) {
+        saveProgress(State.currentMedia, State.currentTime, State.duration || 7200);
+      }
     }
-  }, 3000);
+  }, 1000);
 }
 
 function togglePlayPause() {
@@ -618,12 +702,12 @@ function togglePlayPause() {
   
   State.isPlaying = !State.isPlaying;
   if (State.isPlaying) {
-    iconPlay.style.display = 'none';
-    iconPause.style.display = 'block';
+    if (iconPlay) iconPlay.style.display = 'none';
+    if (iconPause) iconPause.style.display = 'block';
     showToast('Reproduciendo');
   } else {
-    iconPlay.style.display = 'block';
-    iconPause.style.display = 'none';
+    if (iconPlay) iconPlay.style.display = 'block';
+    if (iconPause) iconPause.style.display = 'none';
     showToast('Pausa');
   }
   wakeHud();
@@ -631,13 +715,14 @@ function togglePlayPause() {
 
 function seekBy(seconds) {
   State.currentTime = Math.max(0, State.currentTime + seconds);
-  document.getElementById('time-current').textContent = formatTime(State.currentTime);
+  updateHudTimeline(State.currentTime, State.duration || 7200);
   showToast(`${seconds > 0 ? '+' : ''}${seconds}s`);
   wakeHud();
 }
 
 function wakeHud() {
   const hud = document.getElementById('player-hud');
+  if (!hud) return;
   hud.classList.remove('hidden');
   clearTimeout(State.hudTimer);
   State.hudTimer = setTimeout(() => {
@@ -694,6 +779,8 @@ function closePlayer() {
 
 function cycleServer() {
   State.activeServerIndex = (State.activeServerIndex + 1) % STREAM_SERVERS.length;
+  const nextServer = STREAM_SERVERS[State.activeServerIndex];
+  showToast(`Servidor [${State.activeServerIndex + 1}/${STREAM_SERVERS.length}]: ${nextServer.name}`);
   loadStream(State.currentTime);
 }
 
@@ -798,6 +885,16 @@ document.addEventListener('keydown', (e) => {
     return;
   }
 
+  // Si estamos en el reproductor y el HUD está oculto, las flechas despiertan el menú
+  if (State.currentView === 'player' && !State.virtualCursorActive) {
+    const hud = document.getElementById('player-hud');
+    if (hud && hud.classList.contains('hidden') && [13, 37, 38, 39, 40].includes(keyCode)) {
+      e.preventDefault();
+      wakeHud();
+      return;
+    }
+  }
+
   // Teclas de Dirección D-Pad
   switch (keyCode) {
     case 37: // Izquierda
@@ -856,6 +953,19 @@ window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('btn-hud-rewind').onclick = () => seekBy(-10);
   document.getElementById('btn-hud-server-select').onclick = cycleServer;
   document.getElementById('btn-hud-virtual-cursor').onclick = toggleVirtualCursor;
+
+  const btnFocusFrame = document.getElementById('btn-hud-focus-frame');
+  if (btnFocusFrame) {
+    btnFocusFrame.onclick = () => {
+      const iframe = document.getElementById('player-iframe');
+      if (iframe) {
+        iframe.focus();
+        showToast('Control en reproductor: usa Enter/Flechas. Presiona Atrás para salir.');
+        const hud = document.getElementById('player-hud');
+        if (hud) hud.classList.add('hidden');
+      }
+    };
+  }
 
   // Menú superior navegación
   document.getElementById('nav-home').onclick = () => {

@@ -462,12 +462,17 @@ button.focusable.focused svg {
     rgba(0, 0, 0, 0.9) 100%);
   color: #ffffff;
   transition: opacity 0.3s ease;
-  pointer-events: auto;
+  pointer-events: none;
 }
 
 .player-hud.hidden {
   opacity: 0;
   pointer-events: none;
+}
+
+.hud-top,
+.hud-bottom {
+  pointer-events: auto;
 }
 
 .hud-top {
