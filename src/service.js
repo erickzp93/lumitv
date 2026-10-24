@@ -70,6 +70,18 @@ function evaluate(contextId, expression, gesture) {
 // This function is evaluated only in the frame owned by #player-iframe.
 function mediaCommand(command) {
   var video = document.querySelector('video');
+  var player = document.querySelector('[data-media-player]');
+  // Vidstack/DASH providers maintain their own seeking state. Their documented
+  // request events keep the provider and its media element synchronized.
+  function request(type, detail) {
+    if (!player) return false;
+    player.dispatchEvent(new CustomEvent(type, {detail:detail, bubbles:true, composed:true}));
+    return true;
+  }
+  function seek(time) {
+    var target = Math.max(0, Math.min(time, video.duration > 0 ? video.duration - 0.1 : time));
+    if (!request('media-seek-request', target)) video.currentTime = target;
+  }
   function snapshot() {
     if (!video) return {error:'VIDEO_NOT_READY'};
     return {currentTime:video.currentTime, duration:isFinite(video.duration) ? video.duration : 0,
@@ -86,18 +98,21 @@ function mediaCommand(command) {
   if (action === 'toggle') action = video.paused ? 'play' : 'pause';
   if (action === 'play' && video.readyState < 2) return Promise.resolve({error:'VIDEO_NOT_READY'});
   if (action === 'play' || action === 'unmute') {
+    var volume = typeof command.volume === 'number' ? Math.max(0, Math.min(1, command.volume)) : 0.5;
+    request('media-volume-change-request', volume);
+    request('media-unmute-request');
     video.muted = false;
     video.defaultMuted = false;
-    video.volume = typeof command.volume === 'number' ? Math.max(0, Math.min(1, command.volume)) : 0.5;
+    video.volume = volume;
   }
-  if (action === 'play' && typeof command.startAt === 'number') {
-    video.currentTime = Math.max(0, Math.min(command.startAt, video.duration > 0 ? video.duration - 0.1 : command.startAt));
+  if (action === 'play' && typeof command.startAt === 'number' && Math.abs(video.currentTime - command.startAt) > 0.5) {
+    seek(command.startAt);
   }
-  if (action === 'pause') video.pause();
-  if (action === 'seek') video.currentTime = Math.max(0, Math.min(video.currentTime + command.seconds,
-    video.duration > 0 ? video.duration - 0.1 : video.currentTime + command.seconds));
+  if (action === 'pause') { request('media-pause-request'); video.pause(); }
+  if (action === 'seek') seek(video.currentTime + command.seconds);
   if (action === 'play') {
     try {
+      request('media-play-request');
       return Promise.resolve(video.play()).then(snapshot, function(error) {
         return {error:error.name + ': ' + error.message};
       });

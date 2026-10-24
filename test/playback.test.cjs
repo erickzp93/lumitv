@@ -7,7 +7,7 @@ process.env.LUMINA_TEST = '1';
 const service = require('../src/service.js');
 
 function media(video) {
-  const context = vm.createContext({document:{querySelector:()=>video}, Promise, isFinite});
+  const context = vm.createContext({document:{querySelector:selector=>selector==='video'?video:null}, Promise, isFinite});
   return command => vm.runInContext(`(${service.mediaCommand.toString()})(${JSON.stringify(command)})`, context);
 }
 function video() {
@@ -42,6 +42,14 @@ test('pause, toggle and seeking operate on the actual video with bounds',async()
   await command({action:'pause'});assert.equal(v.paused,true);
   await command({action:'seek',seconds:-10});assert.equal(v.currentTime,0);
   await command({action:'seek',seconds:500});assert.equal(v.currentTime,119.9);
+});
+test('Vidstack seeking uses its provider request event rather than resetting DASH state',async()=>{
+  const v=video(), events=[];
+  const player={dispatchEvent(event){events.push(event);if(event.type==='media-seek-request')v.currentTime=event.detail;}};
+  const context=vm.createContext({document:{querySelector:selector=>selector==='video'?v:player},Promise,isFinite,
+    CustomEvent:function(type,options){this.type=type;Object.assign(this,options);}});
+  await vm.runInContext(`(${service.mediaCommand.toString()})({action:'seek',seconds:10})`,context);
+  assert.equal(events[0].type,'media-seek-request');assert.equal(events[0].detail,10);assert.equal(v.currentTime,10);
 });
 test('missing videos and rejected play promises never report successful playback',async()=>{
   assert.equal((await media(null)({action:'play'})).error,'VIDEO_NOT_READY');
