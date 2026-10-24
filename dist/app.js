@@ -458,6 +458,10 @@ function navigateDirection(direction) {
 // Ratón Virtual Emulado (Para Servidores Embed / Iframes)
 // ============================================================================
 function toggleVirtualCursor() {
+  if (!State.virtualCursorActive && State.currentView === 'player' && document.getElementById('player-start-overlay').style.display !== 'none') {
+    showToast('Primero inicia el video con OK');
+    return;
+  }
   State.virtualCursorActive = !State.virtualCursorActive;
   const cursorEl = document.getElementById('virtual-cursor');
   
@@ -835,7 +839,9 @@ async function activatePlayerFromStartPrompt() {
         await new Promise(resolve => setTimeout(resolve, 600));
         if (State.playerSession !== session) return;
         const confirmed = await window.LuminaBridge.request('status');
-        if (confirmed.paused || confirmed.readyState < 2 || confirmed.currentTime <= sample.currentTime) throw new Error('VIDEO_NOT_READY');
+        const resumeTarget = Math.min(State.resumeAt, Math.max(0, confirmed.duration - 0.1));
+        if (confirmed.paused || confirmed.muted || confirmed.volume <= 0 || confirmed.readyState < 2 ||
+            confirmed.currentTime <= sample.currentTime || confirmed.currentTime + 1 < resumeTarget) throw new Error('VIDEO_NOT_READY');
         if (State.playerSession !== session) return;
         document.getElementById('player-start-overlay').style.display = 'none';
         setFocus(document.getElementById('btn-hud-playpause'));

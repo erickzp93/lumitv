@@ -139,3 +139,17 @@ test('series telemetry cannot overwrite another episode',t=>{
   emit(1);assert.equal(run('State.currentTime'),0);
   emit(2);assert.equal(run('State.history[0].episode'),2);assert.equal(run('State.history[0].currentTime'),42);
 });
+test('resume prompt stays until playback advances at the saved position with sound',async t=>{
+  const {run,w}=app(t);run('State.resumeAt=14');
+  let starts=0;
+  w.LuminaBridge.request=async action=>{
+    if(action==='play')starts++;
+    const sample={currentTime:(starts===1?0:14)+(action==='status'?0.7:0),duration:120,
+      paused:false,muted:false,volume:0.5,readyState:4};
+    w.applyPlaybackSnapshot(sample);
+    return sample;
+  };
+  await run('activatePlayerFromStartPrompt()');
+  assert.equal(starts,2);assert.equal(w.document.getElementById('player-start-overlay').style.display,'none');
+  assert.equal(run('State.currentTime'),14.7);
+});
