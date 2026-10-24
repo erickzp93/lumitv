@@ -1,7 +1,7 @@
 {
   "name": "luminatv",
   "appName": "LuminaTV",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Aplicación moderna de streaming para Smart TVs Samsung con TizenBrew. 100% compatible con control remoto, modo día y noche, y guardado automático de progreso.",
   "packageType": "app",
   "appPath": "dist/index.html",

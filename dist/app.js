@@ -635,6 +635,12 @@ function openPlayer(media, startTime = 0, season = 1, episode = 1) {
   State.selectedSeason = season;
   State.selectedEpisode = episode;
   State.isPlaying = true;
+
+  // Cerrar el modal de detalles al iniciar la reproducción
+  const modalDetails = document.getElementById('modal-details');
+  if (modalDetails) {
+    modalDetails.style.display = 'none';
+  }
   
   const container = document.getElementById('player-container');
   container.style.display = 'flex';
@@ -743,32 +749,28 @@ function closePlayer() {
   
   if (State.virtualCursorActive) toggleVirtualCursor();
   
-  // Si el modal de detalles estaba abierto, devolver el foco y el estado al modal
+  // Cerrar completamente el modal de detalles al salir de la reproducción
   const modalDetails = document.getElementById('modal-details');
-  if (modalDetails && modalDetails.style.display === 'flex') {
-    State.currentView = 'modal-details';
-    
-    // Actualizar botón de reanudar por si avanzó la reproducción
-    if (State.currentMedia) {
-      const saved = getSavedProgress(State.currentMedia.id);
-      const resumeBtn = document.getElementById('btn-details-resume');
-      if (saved && saved.currentTime > 15 && resumeBtn) {
-        resumeBtn.style.display = 'flex';
-        document.getElementById('resume-time-label').textContent = formatTime(saved.currentTime);
-        resumeBtn.onclick = () => openPlayer(State.currentMedia, saved.currentTime, saved.season, saved.episode);
-        setFocus(resumeBtn);
-        return;
-      }
-    }
-    
-    const playBtn = document.getElementById('btn-details-play');
-    if (playBtn) {
-      setFocus(playBtn);
-      return;
-    }
+  if (modalDetails) {
+    modalDetails.style.display = 'none';
   }
 
-  // De lo contrario, regresar al inicio
+  // Refrescar fila de "Continuar Viendo" con el avance recién guardado
+  renderContinueWatching();
+
+  // Si el modal de búsqueda estaba abierto, regresar a la búsqueda
+  const modalSearch = document.getElementById('modal-search');
+  if (modalSearch && modalSearch.style.display === 'flex') {
+    State.currentView = 'modal-search';
+    if (State.lastFocusedCard && document.body.contains(State.lastFocusedCard)) {
+      setFocus(State.lastFocusedCard);
+    } else {
+      setFocus(document.getElementById('search-input'));
+    }
+    return;
+  }
+
+  // Regresar a la pantalla principal (Home) y enfocar la tarjeta previa
   State.currentView = 'home';
   if (State.lastFocusedCard && document.body.contains(State.lastFocusedCard)) {
     setFocus(State.lastFocusedCard);
