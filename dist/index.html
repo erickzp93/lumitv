@@ -10,10 +10,7 @@
   
   <link rel="preconnect" href="https://api.themoviedb.org" />
   <link rel="preconnect" href="https://image.tmdb.org" crossorigin />
-  <link rel="stylesheet" href="./style.css" />
-  
-  <!-- HLS.js para reproducción directa de video nativo -->
-  <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
+  <link rel="stylesheet" href="./style.css?v=1.1.0" />
 </head>
 <body>
 
@@ -164,7 +161,7 @@
     <video class="player-video" id="player-video" playsinline></video>
 
     <!-- Iframe para Servidores Embed de Contingencia -->
-    <iframe class="player-iframe" id="player-iframe" style="display: none;" allowfullscreen="true" allow="autoplay *; fullscreen *; encrypted-media *; picture-in-picture *; accelerometer; gyroscope" referrerpolicy="origin" tabindex="0"></iframe>
+    <iframe class="player-iframe" id="player-iframe" style="display: none;" allowfullscreen="true" allow="autoplay *; fullscreen *; encrypted-media *; picture-in-picture *; accelerometer; gyroscope" referrerpolicy="origin" tabindex="-1"></iframe>
 
     <!-- Overlay Inicial para Iniciar Reproducción en Smart TV (Evita bloqueo de autoplay) -->
     <div class="player-start-overlay" id="player-start-overlay" style="display: none;">
@@ -175,7 +172,11 @@
           </svg>
           <span>PULSA OK PARA REPRODUCIR</span>
         </button>
-        <p class="player-start-hint">El control remoto conectará con el reproductor. Pulsa Flecha Arriba en cualquier momento para ver opciones.</p>
+        <p class="player-start-hint" id="player-start-hint">Pulsa OK para iniciar el video con sonido. Atrás cierra el reproductor.</p>
+        <div class="player-start-actions">
+          <button class="btn-secondary focusable" id="btn-start-server">Cambiar servidor</button>
+          <button class="btn-secondary focusable" id="btn-start-close">Volver</button>
+        </div>
       </div>
     </div>
 
@@ -193,9 +194,9 @@
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>
             Servidor
           </button>
-          <button class="btn-secondary focusable" id="btn-hud-focus-frame" title="Enviar Foco al Reproductor">
+          <button class="btn-secondary focusable" id="btn-hud-focus-frame" title="Activar audio del video">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
-            Enfocar Video
+            Activar sonido
           </button>
           <button class="btn-secondary focusable" id="btn-hud-virtual-cursor" title="Alternar Ratón Virtual (para Embeds)">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3l7 18 3-7 7-3L3 3z"/></svg>
@@ -324,6 +325,7 @@
   </div>
 
   <!-- Script Principal de la Aplicación -->
-  <script src="./app.js"></script>
+  <script src="./player-bridge.js?v=1.1.0"></script>
+  <script src="./app.js?v=1.1.0"></script>
 </body>
 </html>

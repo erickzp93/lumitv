@@ -1,51 +1,47 @@
-# 📺 LuminaTV - Streaming Client para Samsung Smart TV (TizenBrew)
+# LuminaTV para Samsung TizenBrew
 
-**LuminaTV** es una aplicación moderna y minimalista diseñada específicamente para televisores **Samsung Smart TV (Tizen)** a través de **TizenBrew**. Resuelve por completo el problema de incompatibilidad con el control remoto, soporta servidores embed mediante un cursor virtual interactivo, guarda automáticamente el progreso de reproducción y cuenta con modos Día y Noche.
+Cliente de catálogo y reproducción con navegación por control remoto, temas día/noche y progreso de reproducción confirmado.
 
----
+## Actualización 1.1.0
 
-## ✨ Características Principales
+- Play, pausa y saltos de 10 segundos actúan sobre el video real del servidor.
+- El inicio activa el sonido y ajusta el volumen del reproductor al 50 %. El volumen de la TV sigue bajo el control habitual del televisor.
+- Se eliminó el contador artificial. Solo se guarda el tiempo confirmado por el reproductor, sin mezclar títulos ni episodios.
+- Atrás atiende tanto `keydown` como `tizenhwkey`. El iframe se retira antes de que Tizen reenvíe el evento, y se restaura el foco del catálogo.
+- El foco permanece en LuminaTV. Arriba/Abajo muestran los controles; OK alterna reproducción y pausa; Izquierda/Derecha saltan 10 segundos cuando los controles están ocultos.
+- El ratón virtual (0) utiliza el servicio para pulsar dentro del frame. Debug (9) muestra los diagnósticos.
+- Una carga fallida ofrece reintentar, cambiar servidor o volver.
+- Se eliminó la telemetría a una dirección fija de PC. El registro remoto es opcional.
 
-1. **100% Compatible con el Control Remoto (D-Pad):**
-   - Navegación espacial bidimensional fluida.
-   - Indicadores de foco brillantes y animados para pantallas grandes de 10 pies.
-   - Soporte para botones nativos del control de Samsung: Flechas, Enter/OK, Botón Volver/Atrás (`10009`), Play, Pausa, Adelantar (+10s), Retroceder (-10s).
+## Instalar o actualizar
 
-2. **Ratón Virtual Integrado (Solución a Servidores Embed):**
-   - Para servidores web (como AutoEmbed o VidSrc) que requieren hacer clic en el botón de Play del video, LuminaTV incluye un **Cursor Virtual** que se mueve con las flechas del control y emula un clic de ratón con el botón OK.
+1. En TizenBrew, agrega o actualiza el módulo de GitHub `erickzp93/lumitv`.
+2. Cierra TizenBrew por completo y vuelve a abrirlo para recargar los metadatos y su servicio. La versión del módulo debe indicar **1.1.0**.
+3. Mantén habilitado el modo desarrollador y el modo Debug de TizenBrew. Su configuración habitual usa la IP de desarrollador `127.0.0.1`.
+4. Abre LuminaTV, selecciona un título y pulsa OK en **Pulsa OK para reproducir**.
 
-3. **Guardado de Progreso y Reanudación Automática (Resume):**
-   - Registra el minuto y segundo exacto de reproducción cada 3 segundos.
-   - Fila destacada **"Continuar Viendo"** en la pantalla principal con barras de avance.
-   - Botón **"Reanudar (mm:ss)"** al abrir un título para continuar donde lo dejaste.
+La reproducción no necesita una PC ni una IP fija de la TV. El servicio se ejecuta en el propio TizenBrew y encuentra su conexión local de depuración. Si el servicio no está conectado, el reproductor muestra instrucciones y permite salir.
 
-4. **Diseño Moderno Flat (Modo Día y Noche):**
-   - **Modo Día:** Interfaz limpia y brillante con fondos blancos (`#f8fafc`), tarjetas suaves y acentos azul cielo (`#0284c7`).
-   - **Modo Noche:** Fondo azul medianoche profundo (`#070b14`) con acentos cian brillante (`#38bdf8`), ideal para ver películas con la luz apagada.
+## Cómo funciona el control
 
----
+`src/service.js` se incluye como `serviceFile` de TizenBrew, empaquetado en `dist/service.js`. Descubre los puertos locales que ya están escuchando, identifica exclusivamente la página de este módulo y utiliza el protocolo de depuración que TizenBrew ya habilita.
 
-## 🚀 Publicación e Instalación en TizenBrew
+El servicio registra un binding solo en el contexto principal de LuminaTV. Sus comandos permitidos operan exclusivamente sobre el frame de `#player-iframe`: estado, play, pausa, alternar, saltar, activar sonido y clic. No abre un servidor público, ejecuta comandos de shell, modifica ajustes de seguridad ni expone evaluación arbitraria. Cada petición y muestra lleva una sesión para descartar respuestas de videos anteriores. Una actualización reemplaza la instancia anterior del servicio.
 
-Existen dos maneras de instalarla en tu televisor a través de TizenBrew:
+El navegador sigue aplicando sus restricciones entre dominios. El código de la página no intenta leer `iframe.contentWindow.document` ni supone que los mensajes de progreso del proveedor sean una API de control. `MEDIA_DATA`, que contiene historial guardado del proveedor, no se usa como reloj en vivo.
 
-### Opción A: Vía GitHub (Gratis y sin cuenta NPM)
-1. Sube esta carpeta a un repositorio público en tu GitHub (por ejemplo: `mi-usuario/luminatv`).
-2. En tu televisor, abre **TizenBrew > Module Manager > Agregar módulo de GitHub (Add GitHub Module)**.
-3. Escribe:
-   ```text
-   tu-usuario/luminatv
-   ```
-4. Presiona **Completado**, pulsa la flecha **Arriba ⬆️** para guardar y ¡listo!
+La disponibilidad, idiomas, subtítulos y formatos dependen de cada servidor. Un servidor puede fallar aunque otro funcione.
 
-### Opción B: Vía NPM
-1. En esta carpeta, inicia sesión en npm en tu computadora:
-   ```bash
-   npm login
-   ```
-2. Publica el paquete:
-   ```bash
-   npm publish --access public
-   ```
-   *(Nota: si el nombre `luminatv` ya está en uso, puedes cambiar el nombre en `package.json` a `@tu-usuario/luminatv`).*
-3. En el televisor, ve a **TizenBrew > Module Manager > Agregar módulo NPM** y escribe tu paquete.
+## Desarrollo
+
+Se requiere Node.js 18 o posterior en la PC para las herramientas de desarrollo.
+
+```sh
+npm ci
+npm run build
+npm test
+```
+
+La salida del servicio se transpila para los motores Node antiguos usados por TizenBrew; no se necesita instalar dependencias en la TV. Después de editar `src/service.js`, vuelve a generar `dist/service.js` antes de publicar.
+
+El registro remoto se puede activar guardando una URL propia en `localStorage.lumina_logger_url`. De forma predeterminada no se envían registros a ninguna PC.

@@ -1,11 +1,23 @@
 {
   "name": "luminatv",
   "appName": "LuminaTV",
-  "version": "1.0.8",
-  "description": "Aplicación moderna de streaming para Smart TVs Samsung con TizenBrew. 100% compatible con control remoto, modo día y noche, y guardado automático de progreso.",
+  "version": "1.1.0",
+  "description": "Cliente para Samsung TizenBrew con control real de video, audio y progreso confirmado. Requiere modo Debug de TizenBrew.",
   "packageType": "app",
   "appPath": "dist/index.html",
   "main": "dist/index.html",
+  "serviceFile": "dist/service.js",
+  "scripts": {
+    "build": "node scripts/build-service.js",
+    "test": "node --test test/*.test.cjs"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.29.7",
+    "@babel/preset-env": "^7.29.7",
+    "esbuild": "0.21.5",
+    "jsdom": "^26.1.0",
+    "ws": "4.1.0"
+  },
   "author": "ezuniga",
   "license": "MIT",
   "keywords": [

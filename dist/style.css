@@ -446,7 +446,10 @@ button.focusable.focused svg {
   width: 100%;
   height: 100%;
   border: none;
+  pointer-events: none;
 }
+
+.player-start-actions { display: flex; gap: 1rem; }
 
 /* Overlay Inicial para Iniciar Reproducción en Smart TV */
 .player-start-overlay {
@@ -533,6 +536,9 @@ button.focusable.focused svg {
   opacity: 0;
   pointer-events: none;
 }
+
+.player-hud.hidden .hud-top,
+.player-hud.hidden .hud-bottom { pointer-events: none; }
 
 .hud-top,
 .hud-bottom {

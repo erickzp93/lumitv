@@ -8,7 +8,8 @@
 // ============================================================================
 // Motor de Depuración en Pantalla y Telemetría Remota (TV -> PC Logger)
 // ============================================================================
-const REMOTE_LOGGER_URL = 'http://192.168.0.8:9999/log';
+const APP_VERSION = '1.1.0';
+const REMOTE_LOGGER_URL = localStorage.getItem('lumina_logger_url') || '';
 
 const Debugger = {
   enabled: false,
@@ -20,7 +21,7 @@ const Debugger = {
     this.ready = true;
     this.hookConsole();
     this.hookErrors();
-    this.info('LuminaTV v1.0.4 iniciada en TV. UA: ' + (typeof navigator !== 'undefined' ? navigator.userAgent : 'N/A'));
+    this.info(`LuminaTV v${APP_VERSION} iniciada. UA: ${navigator.userAgent}`);
     this.flushQueuedLogs();
   },
 
@@ -84,7 +85,7 @@ const Debugger = {
 
   sendRemote(item) {
     try {
-      if (typeof fetch === 'function') {
+      if (REMOTE_LOGGER_URL && typeof fetch === 'function') {
         fetch(REMOTE_LOGGER_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -151,14 +152,14 @@ const TMDB_API_KEY = '4ef0d7355d9ffb5151e987764708ce96';
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 const TMDB_IMG_URL = 'https://image.tmdb.org/t/p';
 
-// Lista de Servidores de Streaming 100% Verificados y Compatibles con Iframe / Smart TV
+// La disponibilidad y los formatos dependen de cada proveedor.
 const STREAM_SERVERS = [
   {
     id: 'vidlink',
-    name: 'VidLink Pro (1080p Ultra-Rápido • Auto-Play)',
+    name: 'VidLink',
     type: 'embed',
-    movieUrl: (id, start = 0) => `https://vidlink.pro/movie/${id}?autoplay=true&poster=false&primaryColor=0284c7&secondaryColor=0f172a&iconColor=ffffff&nextbutton=true${start > 10 ? `&startAt=${Math.floor(start)}` : ''}`,
-    tvUrl: (id, s, e, start = 0) => `https://vidlink.pro/tv/${id}/${s}/${e}?autoplay=true&poster=false&primaryColor=0284c7&secondaryColor=0f172a&iconColor=ffffff&nextbutton=true${start > 10 ? `&startAt=${Math.floor(start)}` : ''}`
+    movieUrl: (id) => `https://vidlink.pro/movie/${id}?autoplay=false&poster=true&primaryColor=0284c7&secondaryColor=0f172a&iconColor=ffffff`,
+    tvUrl: (id, s, e) => `https://vidlink.pro/tv/${id}/${s}/${e}?autoplay=false&poster=true&primaryColor=0284c7&secondaryColor=0f172a&iconColor=ffffff`
   },
   {
     id: 'multiembed',
@@ -209,6 +210,12 @@ const State = {
   currentTime: 0,
   hudTimer: null,
   hlsInstance: null,
+  playerSession: 0,
+  resumeAt: 0,
+  hasPlaybackSample: false,
+  lastSavedTime: null,
+  lastSavedAt: 0,
+  commandBusy: false,
   
   // Ratón Virtual (para navegar servidores embed)
   virtualCursorActive: false,
@@ -252,7 +259,7 @@ function updateThemeIcons() {
 // Historial y Reanudación de Avance (Resume Tracker)
 // ============================================================================
 function saveProgress(media, currentTime, duration) {
-  if (!media || !media.id || currentTime <= 5 || duration <= 0) return;
+  if (!media || !media.id || !Number.isFinite(currentTime) || !Number.isFinite(duration) || currentTime <= 5 || duration <= 0 || currentTime > duration) return;
   
   const percent = Math.min(100, Math.round((currentTime / duration) * 100));
   const isTv = media.media_type === 'tv' || media.mediaType === 'tv';
@@ -372,7 +379,10 @@ function navigateDirection(direction) {
   let activeScope = document.body;
   if (State.currentView === 'modal-details') activeScope = document.getElementById('modal-details');
   else if (State.currentView === 'modal-search') activeScope = document.getElementById('modal-search');
-  else if (State.currentView === 'player') activeScope = document.getElementById('player-hud');
+  else if (State.currentView === 'player') {
+    const prompt = document.getElementById('player-start-overlay');
+    activeScope = prompt && prompt.style.display !== 'none' ? prompt : document.getElementById('player-hud');
+  }
 
   const elements = getFocusableElements(activeScope);
   if (!elements.length) return;
@@ -480,32 +490,21 @@ function updateCursorPosition() {
 }
 
 function clickVirtualCursor() {
-  const cursorEl = document.getElementById('virtual-cursor');
-  cursorEl.classList.add('clicking');
-  setTimeout(() => cursorEl.classList.remove('clicking'), 150);
-
-  // Ocultar momentáneamente el overlay del HUD para que el clic pase al reproductor
+  const cursor = document.getElementById('virtual-cursor');
+  cursor.classList.add('clicking');
+  setTimeout(() => cursor.classList.remove('clicking'), 150);
   const hud = document.getElementById('player-hud');
-  const wasVisible = !hud.classList.contains('hidden');
+  const visible = !hud.classList.contains('hidden');
   hud.classList.add('hidden');
-
-  // Disparar eventos de ratón
-  const target = document.elementFromPoint(State.cursorX, State.cursorY) || document.body;
-  
-  ['pointerdown', 'mousedown', 'mouseup', 'click'].forEach(eventType => {
-    const evt = new MouseEvent(eventType, {
-      bubbles: true,
-      cancelable: true,
-      view: window,
-      clientX: State.cursorX,
-      clientY: State.cursorY
-    });
-    target.dispatchEvent(evt);
-  });
-
-  if (wasVisible) {
-    setTimeout(() => hud.classList.remove('hidden'), 500);
+  const frame = document.getElementById('player-iframe');
+  const rect = frame.getBoundingClientRect();
+  if (State.cursorX >= rect.left && State.cursorX <= rect.right && State.cursorY >= rect.top && State.cursorY <= rect.bottom) {
+    sendPlayerCommand('click', {x:State.cursorX - rect.left, y:State.cursorY - rect.top});
+  } else {
+    const target = document.elementFromPoint(State.cursorX, State.cursorY);
+    if (target && typeof target.click === 'function') target.click();
   }
+  if (visible) hud.classList.remove('hidden');
 }
 
 // ============================================================================
@@ -728,262 +727,223 @@ function updateHudTimeline(currentTime, duration) {
   }
 }
 
-// Escuchador de Eventos PostMessage (VidLink Pro & otros Reproductores Embed)
+function saveConfirmedProgress(force = false) {
+  if (!State.hasPlaybackSample || !State.currentMedia || State.lastSavedTime === State.currentTime) return;
+  if (!force && Date.now() - State.lastSavedAt < 5000) return;
+  if (State.currentTime <= 5 || State.duration <= 0) return;
+  saveProgress(State.currentMedia, State.currentTime, State.duration);
+  State.lastSavedAt = Date.now();
+  State.lastSavedTime = State.currentTime;
+}
+
+function applyPlaybackSnapshot(snapshot) {
+  if (snapshot.error || !Number.isFinite(snapshot.currentTime) || snapshot.currentTime < 0 ||
+      !Number.isFinite(snapshot.duration) || snapshot.duration <= 0 || snapshot.currentTime > snapshot.duration) return;
+  State.hasPlaybackSample = true;
+  State.currentTime = snapshot.currentTime;
+  State.duration = snapshot.duration;
+  if (typeof snapshot.paused === 'boolean') State.isPlaying = !snapshot.paused && !snapshot.ended;
+  const play = document.getElementById('icon-play');
+  const pause = document.getElementById('icon-pause');
+  if (play) play.style.display = State.isPlaying ? 'none' : 'block';
+  if (pause) pause.style.display = State.isPlaying ? 'block' : 'none';
+  updateHudTimeline(State.currentTime, State.duration);
+  saveConfirmedProgress(!State.isPlaying);
+  Debugger.updateStatusBar();
+}
+
+// Only accept telemetry from the active frame, origin, title and episode.
+// The native bridge supplies authoritative samples, including paused state.
 window.addEventListener('message', (event) => {
-  if (!event.data) return;
-
-  Debugger.msg(`PostMessage de [${event.origin}]:`, event.data);
-
-  if (event.data.type === 'PLAYER_EVENT' && event.data.data) {
-    const payload = event.data.data;
-
-    if (typeof payload.currentTime === 'number') {
-      State.currentTime = payload.currentTime;
+  if (State.currentView !== 'player') return;
+  const frame = document.getElementById('player-iframe');
+  if (!frame || event.source !== frame.contentWindow) return;
+  let data = event.data;
+  try {
+    if (event.origin !== new URL(frame.src).origin) return;
+    if (typeof data === 'string') {
+      if (data.length > 100000) return;
+      data = JSON.parse(data);
     }
-    if (typeof payload.duration === 'number' && payload.duration > 0) {
-      State.duration = payload.duration;
-    }
-
-    const iconPlay = document.getElementById('icon-play');
-    const iconPause = document.getElementById('icon-pause');
-
-    if (payload.event === 'play') {
-      State.isPlaying = true;
-      if (iconPlay) iconPlay.style.display = 'none';
-      if (iconPause) iconPause.style.display = 'block';
-    } else if (payload.event === 'pause') {
-      State.isPlaying = false;
-      if (iconPlay) iconPlay.style.display = 'block';
-      if (iconPause) iconPause.style.display = 'none';
-    } else if (payload.event === 'ended') {
-      State.isPlaying = false;
-      showToast('Reproducción finalizada');
-    }
-
-    updateHudTimeline(State.currentTime, State.duration);
-
-    if (State.currentMedia && State.currentTime > 5) {
-      saveProgress(State.currentMedia, State.currentTime, State.duration || 7200);
-    }
+  } catch (error) { return; }
+  if (!data || !['MEDIA_DATA', 'PLAYER_EVENT'].includes(data.type)) return;
+  if (data.type === 'MEDIA_DATA') {
+    // This contains the provider's entire saved history, not a live clock.
+    // Never overwrite current playback or store unrelated titles from it.
+    return;
   }
+  const payload = data.data;
+  const media = State.currentMedia;
+  if (!payload || !media || String(payload.mtmdbId || payload.tmdbId || payload.id) !== String(media.id)) return;
+  const isTv = media.media_type === 'tv' || media.mediaType === 'tv';
+  if (isTv && (Number(payload.season) !== Number(State.selectedSeason) || Number(payload.episode) !== Number(State.selectedEpisode))) return;
+  if (window.LuminaBridge.connected && Date.now() - window.LuminaBridge.lastSeen < 5000) return;
+  const paused = ['pause', 'ended'].includes(payload.event) ? true : payload.event === 'play' ? false : undefined;
+  applyPlaybackSnapshot({currentTime:payload.currentTime, duration:payload.duration, paused, ended:payload.event === 'ended'});
 });
 
+function resetPlayerFrame() {
+  const oldFrame = document.getElementById('player-iframe');
+  const freshFrame = oldFrame.cloneNode(false);
+  freshFrame.removeAttribute('src');
+  freshFrame.style.display = 'none';
+  // Remove the cross-origin window synchronously before Tizen forwards Back.
+  oldFrame.parentNode.replaceChild(freshFrame, oldFrame);
+  return freshFrame;
+}
+
 function openPlayer(media, startTime = 0, season = 1, episode = 1) {
+  saveConfirmedProgress(true);
+  State.hasPlaybackSample = false;
   State.currentMedia = media;
   State.currentView = 'player';
-  State.currentTime = startTime;
-  State.duration = (media && media.runtime ? media.runtime * 60 : 7200);
-  State.selectedSeason = season;
-  State.selectedEpisode = episode;
-  State.isPlaying = false; // Detenido hasta activación real del usuario
-
-  // Cerrar el modal de detalles al iniciar la reproducción
-  const modalDetails = document.getElementById('modal-details');
-  if (modalDetails) {
-    modalDetails.style.display = 'none';
-  }
-  
-  const container = document.getElementById('player-container');
-  container.style.display = 'flex';
-
+  State.selectedSeason = season || 1;
+  State.selectedEpisode = episode || 1;
+  document.getElementById('modal-details').style.display = 'none';
+  document.getElementById('player-container').style.display = 'flex';
   const isTv = media.media_type === 'tv' || media.mediaType === 'tv';
-  const title = media.title || media.name || 'Reproduciendo';
-  const titleEl = document.getElementById('hud-media-title');
-  if (titleEl) titleEl.textContent = title;
-  
-  const subEl = document.getElementById('hud-media-sub');
-  if (subEl) subEl.textContent = isTv ? `Temporada ${season} • Episodio ${episode}` : 'Película';
-
-  const iconPlay = document.getElementById('icon-play');
-  const iconPause = document.getElementById('icon-pause');
-  if (iconPlay) iconPlay.style.display = 'block';
-  if (iconPause) iconPause.style.display = 'none';
-
-  updateHudTimeline(startTime, State.duration);
-
+  document.getElementById('hud-media-title').textContent = media.title || media.name || 'Reproduciendo';
+  document.getElementById('hud-media-sub').textContent = isTv ? `Temporada ${State.selectedSeason} • Episodio ${State.selectedEpisode}` : 'Película';
   loadStream(startTime);
-
-  // Presentar overlay de activación directa para Smart TV (evita bloqueo de autoplay)
-  const startOverlay = document.getElementById('player-start-overlay');
-  const startBtn = document.getElementById('btn-start-play');
-  if (startOverlay && startBtn) {
-    startOverlay.style.display = 'flex';
-    setFocus(startBtn);
-  } else {
-    wakeHud();
-    setFocus(document.getElementById('btn-hud-playpause'));
-  }
 }
 
-function activatePlayerFromStartPrompt() {
-  const startOverlay = document.getElementById('player-start-overlay');
-  if (startOverlay) {
-    startOverlay.style.display = 'none';
-  }
-
-  State.isPlaying = true;
-  const iconPlay = document.getElementById('icon-play');
-  const iconPause = document.getElementById('icon-pause');
-  if (iconPlay) iconPlay.style.display = 'none';
-  if (iconPause) iconPause.style.display = 'block';
-
-  const iframeEl = document.getElementById('player-iframe');
-  if (iframeEl) {
-    iframeEl.focus();
-  }
-
-  showToast('Reproductor activo • Pulsa Flecha Arriba para controles');
-
-  // Iniciar el rastreador de avance en pantalla
-  startProgressTracker();
-
-  // Ocultar HUD tras 3.5 segundos
-  const hud = document.getElementById('player-hud');
-  if (hud) {
-    clearTimeout(State.hudTimer);
-    State.hudTimer = setTimeout(() => {
-      hud.classList.add('hidden');
-    }, 3500);
-  }
+function showStartPrompt(message) {
+  const overlay = document.getElementById('player-start-overlay');
+  overlay.style.display = 'flex';
+  document.getElementById('player-start-hint').textContent = message || 'Pulsa OK para iniciar el video con sonido. Atrás cierra el reproductor.';
+  const button = document.getElementById('btn-start-play');
+  button.disabled = false;
+  button.querySelector('span').textContent = 'PULSA OK PARA REPRODUCIR';
+  wakeHud();
+  setFocus(button);
 }
 
-function startProgressTracker() {
-  if (window.progressInterval) clearInterval(window.progressInterval);
-  window.progressInterval = setInterval(() => {
-    if (State.currentView === 'player' && State.currentMedia && State.isPlaying) {
-      State.currentTime += 1;
-      updateHudTimeline(State.currentTime, State.duration || 7200);
-
-      // Guardar en el historial cada 5 segundos
-      if (State.currentTime % 5 === 0) {
-        saveProgress(State.currentMedia, State.currentTime, State.duration || 7200);
+async function activatePlayerFromStartPrompt() {
+  if (State.commandBusy || State.currentView !== 'player') return;
+  const session = State.playerSession;
+  State.commandBusy = true;
+  const button = document.getElementById('btn-start-play');
+  button.querySelector('span').textContent = 'INICIANDO VIDEO…';
+  document.getElementById('player-start-hint').textContent = 'Preparando imagen y sonido. Puedes pulsar Atrás para salir.';
+  const deadline = Date.now() + 30000;
+  let lastError;
+  try {
+    while (Date.now() < deadline && State.playerSession === session) {
+      try {
+        const sample = await window.LuminaBridge.request('play', {startAt:State.resumeAt, volume:0.5});
+        if (!sample || sample.paused) throw new Error('VIDEO_NOT_READY');
+        if (State.playerSession !== session) return;
+        document.getElementById('player-start-overlay').style.display = 'none';
+        setFocus(document.getElementById('btn-hud-playpause'));
+        showToast('Reproduciendo con sonido');
+        wakeHud();
+        return;
+      } catch (error) {
+        lastError = error;
+        if (!['VIDEO_NOT_READY', 'BRIDGE_OFFLINE', 'APP_NOT_READY'].includes(error.message)) throw error;
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
     }
-  }, 1000);
+    if (State.playerSession === session) throw lastError || new Error('VIDEO_NOT_READY');
+  } catch (error) {
+    if (State.playerSession !== session) return;
+    Debugger.error('No se pudo iniciar el video: ' + error.message);
+    showStartPrompt(error.message === 'BRIDGE_OFFLINE'
+      ? 'El control de video no está conectado. Vuelve a TizenBrew, actualiza el módulo y ábrelo en modo Debug.'
+      : 'El servidor no pudo iniciar este video. Puedes reintentar o cambiar de servidor.');
+  } finally {
+    if (State.playerSession === session) State.commandBusy = false;
+  }
 }
 
 function loadStream(startTime = 0) {
-  const media = State.currentMedia;
-  if (!media) return;
-  const isTv = media.media_type === 'tv' || media.mediaType === 'tv';
+  if (!State.currentMedia) return;
+  saveConfirmedProgress(true);
+  State.playerSession += 1;
+  State.commandBusy = false;
+  State.hasPlaybackSample = false;
+  State.lastSavedTime = null;
+  State.lastSavedAt = 0;
+  State.resumeAt = Number.isFinite(startTime) ? Math.max(0, startTime) : 0;
+  State.currentTime = 0;
+  State.duration = 0;
+  State.isPlaying = false;
+  clearTimeout(State.hudTimer);
+  // Also stop a tracker left by an older version during a debug upgrade.
+  if (window.progressInterval) clearInterval(window.progressInterval);
+  if (State.virtualCursorActive) toggleVirtualCursor();
   const server = STREAM_SERVERS[State.activeServerIndex];
-  
-  const serverNameEl = document.getElementById('hud-server-name');
-  if (serverNameEl) serverNameEl.textContent = server.name;
+  const media = State.currentMedia;
+  const isTv = media.media_type === 'tv' || media.mediaType === 'tv';
+  const streamUrl = isTv ? server.tvUrl(media.id, State.selectedSeason, State.selectedEpisode) : server.movieUrl(media.id);
+  document.getElementById('hud-server-name').textContent = server.name;
+  document.getElementById('player-video').style.display = 'none';
+  const frame = resetPlayerFrame();
+  frame.style.display = 'block';
+  frame.onload = () => Debugger.info(`Página de ${server.name} cargada; esperando video real`);
+  frame.onerror = () => Debugger.error(`No se pudo cargar ${server.name}`);
+  frame.src = streamUrl;
+  document.getElementById('icon-play').style.display = 'block';
+  document.getElementById('icon-pause').style.display = 'none';
+  document.getElementById('timeline-filled').style.width = '0%';
+  updateHudTimeline(0, 0);
+  Debugger.net(`Abriendo ${server.name}`);
+  showStartPrompt();
+}
 
-  const videoEl = document.getElementById('player-video');
-  const iframeEl = document.getElementById('player-iframe');
-
-  if (server.type === 'embed') {
-    videoEl.style.display = 'none';
-    iframeEl.style.display = 'block';
-    
-    const streamUrl = isTv 
-      ? server.tvUrl(media.id, State.selectedSeason, State.selectedEpisode, startTime)
-      : server.movieUrl(media.id, startTime);
-    
-    Debugger.net(`Cargando stream en iframe: [${server.name}] -> ${streamUrl}`);
-    
-    iframeEl.onload = () => {
-      Debugger.info(`Iframe cargado con éxito para ${server.name}`);
-    };
-    iframeEl.onerror = (err) => {
-      Debugger.error(`Iframe error al cargar ${server.name}:`, err);
-    };
-
-    iframeEl.src = streamUrl;
-    showToast(`Conectado a ${server.name}`);
+async function sendPlayerCommand(action, options = {}) {
+  if (State.currentView !== 'player' || State.commandBusy) return;
+  const session = State.playerSession;
+  State.commandBusy = true;
+  try {
+    await window.LuminaBridge.request(action, options);
+    if (session === State.playerSession) wakeHud();
+  } catch (error) {
+    if (session !== State.playerSession) return;
+    Debugger.warn(`Control de video: ${error.message}`);
+    showToast(error.message === 'BRIDGE_OFFLINE' ? 'Abre el módulo desde TizenBrew en modo Debug' : 'El video aún no está listo. Reintenta o cambia de servidor.');
+  } finally {
+    if (session === State.playerSession) State.commandBusy = false;
   }
 }
 
-function togglePlayPause() {
-  const iconPlay = document.getElementById('icon-play');
-  const iconPause = document.getElementById('icon-pause');
-  
-  State.isPlaying = !State.isPlaying;
-  if (State.isPlaying) {
-    if (iconPlay) iconPlay.style.display = 'none';
-    if (iconPause) iconPause.style.display = 'block';
-    startProgressTracker();
-    showToast('Reproduciendo');
-  } else {
-    if (iconPlay) iconPlay.style.display = 'block';
-    if (iconPause) iconPause.style.display = 'none';
-    if (window.progressInterval) clearInterval(window.progressInterval);
-    showToast('Pausa');
-  }
-  wakeHud();
-}
-
-function seekBy(seconds) {
-  State.currentTime = Math.max(0, State.currentTime + seconds);
-  updateHudTimeline(State.currentTime, State.duration || 7200);
-  showToast(`${seconds > 0 ? '+' : ''}${seconds}s`);
-  wakeHud();
-}
+function togglePlayPause() { return sendPlayerCommand('toggle', {volume:0.5}); }
+function seekBy(seconds) { return sendPlayerCommand('seek', {seconds}); }
 
 function wakeHud() {
   const hud = document.getElementById('player-hud');
-  if (!hud) return;
   hud.classList.remove('hidden');
   clearTimeout(State.hudTimer);
   State.hudTimer = setTimeout(() => {
-    if (State.currentView === 'player' && !State.virtualCursorActive) {
-      hud.classList.add('hidden');
-    }
+    const overlay = document.getElementById('player-start-overlay');
+    if (State.currentView === 'player' && !State.virtualCursorActive && overlay.style.display === 'none') hud.classList.add('hidden');
   }, 4500);
 }
 
 function closePlayer() {
-  const container = document.getElementById('player-container');
-  container.style.display = 'none';
-  
-  const startOverlay = document.getElementById('player-start-overlay');
-  if (startOverlay) startOverlay.style.display = 'none';
-
-  const iframe = document.getElementById('player-iframe');
-  iframe.src = '';
-  
+  saveConfirmedProgress(true);
+  State.playerSession += 1;
+  State.commandBusy = false;
+  State.hasPlaybackSample = false;
   State.isPlaying = false;
+  clearTimeout(State.hudTimer);
   if (window.progressInterval) clearInterval(window.progressInterval);
-  
+  resetPlayerFrame();
+  document.getElementById('player-container').style.display = 'none';
+  document.getElementById('player-start-overlay').style.display = 'none';
   if (State.virtualCursorActive) toggleVirtualCursor();
-  
-  // Cerrar completamente el modal de detalles al salir de la reproducción
-  const modalDetails = document.getElementById('modal-details');
-  if (modalDetails) {
-    modalDetails.style.display = 'none';
-  }
-
-  // Refrescar fila de "Continuar Viendo" con el avance recién guardado
+  document.getElementById('modal-details').style.display = 'none';
   renderContinueWatching();
-
-  // Si el modal de búsqueda estaba abierto, regresar a la búsqueda
-  const modalSearch = document.getElementById('modal-search');
-  if (modalSearch && modalSearch.style.display === 'flex') {
-    State.currentView = 'modal-search';
-    if (State.lastFocusedCard && document.body.contains(State.lastFocusedCard)) {
-      setFocus(State.lastFocusedCard);
-    } else {
-      setFocus(document.getElementById('search-input'));
-    }
-    return;
-  }
-
-  // Regresar a la pantalla principal (Home) y enfocar la tarjeta previa
-  State.currentView = 'home';
-  if (State.lastFocusedCard && document.body.contains(State.lastFocusedCard)) {
-    setFocus(State.lastFocusedCard);
-  } else {
-    setFocus(document.getElementById('hero-play-btn'));
-  }
+  const search = document.getElementById('modal-search');
+  State.currentView = search && search.style.display === 'flex' ? 'modal-search' : 'home';
+  if (State.lastFocusedCard && document.body.contains(State.lastFocusedCard)) setFocus(State.lastFocusedCard);
+  else setFocus(document.getElementById(State.currentView === 'modal-search' ? 'search-input' : 'hero-play-btn'));
 }
 
 function cycleServer() {
+  const resumeAt = State.hasPlaybackSample ? State.currentTime : State.resumeAt;
   State.activeServerIndex = (State.activeServerIndex + 1) % STREAM_SERVERS.length;
-  const nextServer = STREAM_SERVERS[State.activeServerIndex];
-  showToast(`Servidor [${State.activeServerIndex + 1}/${STREAM_SERVERS.length}]: ${nextServer.name}`);
-  loadStream(State.currentTime);
+  loadStream(resumeAt);
 }
 
 // ============================================================================
@@ -1043,124 +1003,57 @@ function formatTime(seconds) {
 // ============================================================================
 // Controlador de Eventos de Teclado y Control Remoto Samsung
 // ============================================================================
-document.addEventListener('keydown', (e) => {
-  const keyCode = e.keyCode;
-  const key = e.key;
+let lastBackAt = 0;
+function handleBack() {
+  if (Date.now() - lastBackAt < 250) return true;
+  if (State.currentView === 'player') closePlayer();
+  else if (State.currentView === 'modal-details') closeDetails();
+  else if (State.currentView === 'modal-search') closeSearchModal();
+  else return false;
+  lastBackAt = Date.now();
+  return true;
+}
 
-  // Manejo de Teclas de Medios (Play / Pausa / Detener del control)
-  if (keyCode === 415 || keyCode === 19 || key === 'MediaPlay' || key === 'MediaPause' || key === 'MediaPlayPause') {
-    if (State.currentView === 'player') {
-      togglePlayPause();
-      return;
-    }
+document.addEventListener('tizenhwkey', (event) => {
+  if (event.keyName === 'back' && handleBack()) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
   }
+}, true);
 
-  if (keyCode === 417 || key === 'MediaFastForward') {
-    if (State.currentView === 'player') {
-      seekBy(10);
-      return;
-    }
+document.addEventListener('keydown', (event) => {
+  const code = event.keyCode;
+  const key = event.key;
+  const input = event.target && ['INPUT', 'TEXTAREA'].includes(event.target.tagName);
+  let handled = true;
+  if ([10009, 27].includes(code) || (code === 8 && !input)) handled = handleBack();
+  else if (input) return;
+  else if ([57, 457, 458].includes(code) || ['Info', 'Guide'].includes(key)) Debugger.toggle();
+  else if (code === 48 && State.currentView === 'player') toggleVirtualCursor();
+  else if (State.currentView === 'player' && (code === 415 || key === 'MediaPlay')) {
+    if (document.getElementById('player-start-overlay').style.display !== 'none') activatePlayerFromStartPrompt();
+    else sendPlayerCommand('play', {volume:0.5});
+  } else if (State.currentView === 'player' && (code === 19 || key === 'MediaPause')) sendPlayerCommand('pause');
+  else if (State.currentView === 'player' && (code === 10252 || key === 'MediaPlayPause')) {
+    if (document.getElementById('player-start-overlay').style.display !== 'none') activatePlayerFromStartPrompt();
+    else togglePlayPause();
   }
-
-  if (keyCode === 412 || key === 'MediaRewind') {
-    if (State.currentView === 'player') {
-      seekBy(-10);
-      return;
-    }
-  }
-
-  // Tecla Volver / Atrás (Tizen Return: 10009, Escape: 27, Backspace: 8)
-  if (keyCode === 10009 || keyCode === 27 || (keyCode === 8 && e.target.tagName !== 'INPUT')) {
-    e.preventDefault();
-    if (State.currentView === 'player') {
-      closePlayer();
-      return;
-    }
-    if (State.currentView === 'modal-details') {
-      closeDetails();
-      return;
-    }
-    if (State.currentView === 'modal-search') {
-      closeSearchModal();
-      return;
-    }
-    return;
-  }
-
-  // Comportamiento contextual dentro del Reproductor de Video
-  if (State.currentView === 'player' && !State.virtualCursorActive) {
-    const startOverlay = document.getElementById('player-start-overlay');
-    const isStartPromptVisible = startOverlay && startOverlay.style.display !== 'none';
-    const hud = document.getElementById('player-hud');
-    const isHudHidden = hud && hud.classList.contains('hidden');
-
-    // 1. Si el botón central "PULSA OK PARA REPRODUCIR" está en pantalla:
-    if (isStartPromptVisible) {
-      if (keyCode === 13) {
-        e.preventDefault();
-        activatePlayerFromStartPrompt();
-        return;
-      }
-    }
-
-    // 2. Si el HUD está oculto y el usuario pulsa Arriba o Abajo: despertar el menú del HUD
-    if (isHudHidden && (keyCode === 38 || keyCode === 40)) {
-      e.preventDefault();
-      wakeHud();
-      setFocus(document.getElementById('btn-hud-playpause'));
-      return;
-    }
-
-    // 3. Si el HUD está oculto y el usuario pulsa OK (Enter) o Espacio: alternar Play/Pausa
-    if (isHudHidden && (keyCode === 13 || keyCode === 32)) {
-      const iframe = document.getElementById('player-iframe');
-      if (iframe && document.activeElement !== iframe) {
-        iframe.focus();
-      }
-      togglePlayPause();
-      return;
-    }
-  }
-
-  // Tecla '0' del control para alternar ratón virtual en el reproductor
-  if (keyCode === 48 && State.currentView === 'player') {
-    toggleVirtualCursor();
-    return;
-  }
-
-  // Tecla '9' o Info para alternar Consola de Depuración
-  if (keyCode === 57 || keyCode === 457 || keyCode === 458 || key === 'Info' || key === 'Guide') {
-    Debugger.toggle();
-    return;
-  }
-
-  // Teclas de Dirección D-Pad
-  switch (keyCode) {
-    case 37: // Izquierda
-      e.preventDefault();
-      navigateDirection('left');
-      break;
-    case 38: // Arriba
-      e.preventDefault();
-      navigateDirection('up');
-      break;
-    case 39: // Derecha
-      e.preventDefault();
-      navigateDirection('right');
-      break;
-    case 40: // Abajo
-      e.preventDefault();
-      navigateDirection('down');
-      break;
-    case 13: // Enter / Botón Central OK
-      if (State.virtualCursorActive) {
-        clickVirtualCursor();
-      } else if (State.currentFocusedElement) {
-        State.currentFocusedElement.click();
-      }
-      break;
-  }
-});
+  else if (State.currentView === 'player' && (code === 413 || key === 'MediaStop')) closePlayer();
+  else if (State.currentView === 'player' && (code === 417 || key === 'MediaFastForward')) seekBy(10);
+  else if (State.currentView === 'player' && (code === 412 || key === 'MediaRewind')) seekBy(-10);
+  else if ([37, 38, 39, 40].includes(code)) {
+    const hidden = State.currentView === 'player' && document.getElementById('player-hud').classList.contains('hidden');
+    if (hidden && !State.virtualCursorActive) {
+      if (code === 37 || code === 39) seekBy(code === 37 ? -10 : 10);
+      else { wakeHud(); setFocus(document.getElementById('btn-hud-playpause')); }
+    } else navigateDirection({37:'left', 38:'up', 39:'right', 40:'down'}[code]);
+  } else if (code === 13 || code === 32) {
+    if (State.virtualCursorActive) clickVirtualCursor();
+    else if (State.currentView === 'player' && document.getElementById('player-hud').classList.contains('hidden')) togglePlayPause();
+    else if (State.currentFocusedElement) State.currentFocusedElement.click();
+  } else handled = false;
+  if (handled) { event.preventDefault(); event.stopPropagation(); }
+}, true);
 
 // ============================================================================
 // Inicialización General
@@ -1195,18 +1088,9 @@ function initApp() {
   document.getElementById('btn-hud-server-select').onclick = cycleServer;
   document.getElementById('btn-hud-virtual-cursor').onclick = toggleVirtualCursor;
 
-  const btnFocusFrame = document.getElementById('btn-hud-focus-frame');
-  if (btnFocusFrame) {
-    btnFocusFrame.onclick = () => {
-      const iframe = document.getElementById('player-iframe');
-      if (iframe) {
-        iframe.focus();
-        showToast('Control en reproductor: usa Enter/Flechas. Presiona Atrás para salir.');
-        const hud = document.getElementById('player-hud');
-        if (hud) hud.classList.add('hidden');
-      }
-    };
-  }
+  document.getElementById('btn-hud-focus-frame').onclick = () => sendPlayerCommand('unmute', {volume:0.5});
+  document.getElementById('btn-start-server').onclick = cycleServer;
+  document.getElementById('btn-start-close').onclick = closePlayer;
 
   // Botones de depuración
   const btnDebugToggle = document.getElementById('btn-debug-toggle');
