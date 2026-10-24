@@ -1165,7 +1165,7 @@ document.addEventListener('keydown', (e) => {
 // ============================================================================
 // Inicialización General
 // ============================================================================
-window.addEventListener('DOMContentLoaded', () => {
+function initApp() {
   Debugger.init();
   initTheme();
   loadInitialData();
@@ -1236,4 +1236,10 @@ window.addEventListener('DOMContentLoaded', () => {
     const firstCard = document.querySelector('#carousel-popular-series .media-card');
     if (firstCard) setFocus(firstCard);
   };
-});
+}
+
+if (document.readyState === 'loading') {
+  window.addEventListener('DOMContentLoaded', initApp);
+} else {
+  initApp();
+}
