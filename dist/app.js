@@ -157,8 +157,8 @@ const STREAM_SERVERS = [
     id: 'vidlink',
     name: 'VidLink Pro (1080p Ultra-Rápido • Auto-Play)',
     type: 'embed',
-    movieUrl: (id, start = 0) => `https://vidlink.pro/movie/${id}?autoplay=true&primaryColor=0284c7&secondaryColor=0f172a&iconColor=ffffff&nextbutton=true${start > 10 ? `&startAt=${Math.floor(start)}` : ''}`,
-    tvUrl: (id, s, e, start = 0) => `https://vidlink.pro/tv/${id}/${s}/${e}?autoplay=true&primaryColor=0284c7&secondaryColor=0f172a&iconColor=ffffff&nextbutton=true${start > 10 ? `&startAt=${Math.floor(start)}` : ''}`
+    movieUrl: (id, start = 0) => `https://vidlink.pro/movie/${id}?autoplay=true&poster=false&primaryColor=0284c7&secondaryColor=0f172a&iconColor=ffffff&nextbutton=true${start > 10 ? `&startAt=${Math.floor(start)}` : ''}`,
+    tvUrl: (id, s, e, start = 0) => `https://vidlink.pro/tv/${id}/${s}/${e}?autoplay=true&poster=false&primaryColor=0284c7&secondaryColor=0f172a&iconColor=ffffff&nextbutton=true${start > 10 ? `&startAt=${Math.floor(start)}` : ''}`
   },
   {
     id: 'multiembed',
@@ -775,7 +775,7 @@ function openPlayer(media, startTime = 0, season = 1, episode = 1) {
   State.duration = (media && media.runtime ? media.runtime * 60 : 7200);
   State.selectedSeason = season;
   State.selectedEpisode = episode;
-  State.isPlaying = true;
+  State.isPlaying = false; // Detenido hasta activación real del usuario
 
   // Cerrar el modal de detalles al iniciar la reproducción
   const modalDetails = document.getElementById('modal-details');
@@ -796,16 +796,70 @@ function openPlayer(media, startTime = 0, season = 1, episode = 1) {
 
   const iconPlay = document.getElementById('icon-play');
   const iconPause = document.getElementById('icon-pause');
-  if (iconPlay) iconPlay.style.display = 'none';
-  if (iconPause) iconPause.style.display = 'block';
+  if (iconPlay) iconPlay.style.display = 'block';
+  if (iconPause) iconPause.style.display = 'none';
 
   updateHudTimeline(startTime, State.duration);
 
   loadStream(startTime);
-  wakeHud();
 
-  // Enfocar el botón de reproducción/pausa en el HUD para control inmediato con el control
-  setFocus(document.getElementById('btn-hud-playpause'));
+  // Presentar overlay de activación directa para Smart TV (evita bloqueo de autoplay)
+  const startOverlay = document.getElementById('player-start-overlay');
+  const startBtn = document.getElementById('btn-start-play');
+  if (startOverlay && startBtn) {
+    startOverlay.style.display = 'flex';
+    setFocus(startBtn);
+  } else {
+    wakeHud();
+    setFocus(document.getElementById('btn-hud-playpause'));
+  }
+}
+
+function activatePlayerFromStartPrompt() {
+  const startOverlay = document.getElementById('player-start-overlay');
+  if (startOverlay) {
+    startOverlay.style.display = 'none';
+  }
+
+  State.isPlaying = true;
+  const iconPlay = document.getElementById('icon-play');
+  const iconPause = document.getElementById('icon-pause');
+  if (iconPlay) iconPlay.style.display = 'none';
+  if (iconPause) iconPause.style.display = 'block';
+
+  const iframeEl = document.getElementById('player-iframe');
+  if (iframeEl) {
+    iframeEl.focus();
+  }
+
+  showToast('Reproductor activo • Pulsa Flecha Arriba para controles');
+
+  // Iniciar el rastreador de avance en pantalla
+  startProgressTracker();
+
+  // Ocultar HUD tras 3.5 segundos
+  const hud = document.getElementById('player-hud');
+  if (hud) {
+    clearTimeout(State.hudTimer);
+    State.hudTimer = setTimeout(() => {
+      hud.classList.add('hidden');
+    }, 3500);
+  }
+}
+
+function startProgressTracker() {
+  if (window.progressInterval) clearInterval(window.progressInterval);
+  window.progressInterval = setInterval(() => {
+    if (State.currentView === 'player' && State.currentMedia && State.isPlaying) {
+      State.currentTime += 1;
+      updateHudTimeline(State.currentTime, State.duration || 7200);
+
+      // Guardar en el historial cada 5 segundos
+      if (State.currentTime % 5 === 0) {
+        saveProgress(State.currentMedia, State.currentTime, State.duration || 7200);
+      }
+    }
+  }, 1000);
 }
 
 function loadStream(startTime = 0) {
@@ -840,20 +894,6 @@ function loadStream(startTime = 0) {
     iframeEl.src = streamUrl;
     showToast(`Conectado a ${server.name}`);
   }
-
-  // Actualizador continuo de avance en pantalla y guardado automático en historial
-  if (window.progressInterval) clearInterval(window.progressInterval);
-  window.progressInterval = setInterval(() => {
-    if (State.currentView === 'player' && State.currentMedia && State.isPlaying) {
-      State.currentTime += 1;
-      updateHudTimeline(State.currentTime, State.duration || 7200);
-
-      // Guardar en el historial cada 5 segundos
-      if (State.currentTime % 5 === 0) {
-        saveProgress(State.currentMedia, State.currentTime, State.duration || 7200);
-      }
-    }
-  }, 1000);
 }
 
 function togglePlayPause() {
@@ -864,10 +904,12 @@ function togglePlayPause() {
   if (State.isPlaying) {
     if (iconPlay) iconPlay.style.display = 'none';
     if (iconPause) iconPause.style.display = 'block';
+    startProgressTracker();
     showToast('Reproduciendo');
   } else {
     if (iconPlay) iconPlay.style.display = 'block';
     if (iconPause) iconPause.style.display = 'none';
+    if (window.progressInterval) clearInterval(window.progressInterval);
     showToast('Pausa');
   }
   wakeHud();
@@ -896,9 +938,13 @@ function closePlayer() {
   const container = document.getElementById('player-container');
   container.style.display = 'none';
   
+  const startOverlay = document.getElementById('player-start-overlay');
+  if (startOverlay) startOverlay.style.display = 'none';
+
   const iframe = document.getElementById('player-iframe');
   iframe.src = '';
   
+  State.isPlaying = false;
   if (window.progressInterval) clearInterval(window.progressInterval);
   
   if (State.virtualCursorActive) toggleVirtualCursor();
@@ -1041,12 +1087,37 @@ document.addEventListener('keydown', (e) => {
     return;
   }
 
-  // Si estamos en el reproductor y el HUD está oculto, las flechas despiertan el menú
+  // Comportamiento contextual dentro del Reproductor de Video
   if (State.currentView === 'player' && !State.virtualCursorActive) {
+    const startOverlay = document.getElementById('player-start-overlay');
+    const isStartPromptVisible = startOverlay && startOverlay.style.display !== 'none';
     const hud = document.getElementById('player-hud');
-    if (hud && hud.classList.contains('hidden') && [13, 37, 38, 39, 40].includes(keyCode)) {
+    const isHudHidden = hud && hud.classList.contains('hidden');
+
+    // 1. Si el botón central "PULSA OK PARA REPRODUCIR" está en pantalla:
+    if (isStartPromptVisible) {
+      if (keyCode === 13) {
+        e.preventDefault();
+        activatePlayerFromStartPrompt();
+        return;
+      }
+    }
+
+    // 2. Si el HUD está oculto y el usuario pulsa Arriba o Abajo: despertar el menú del HUD
+    if (isHudHidden && (keyCode === 38 || keyCode === 40)) {
       e.preventDefault();
       wakeHud();
+      setFocus(document.getElementById('btn-hud-playpause'));
+      return;
+    }
+
+    // 3. Si el HUD está oculto y el usuario pulsa OK (Enter) o Espacio: alternar Play/Pausa
+    if (isHudHidden && (keyCode === 13 || keyCode === 32)) {
+      const iframe = document.getElementById('player-iframe');
+      if (iframe && document.activeElement !== iframe) {
+        iframe.focus();
+      }
+      togglePlayPause();
       return;
     }
   }
@@ -1109,6 +1180,12 @@ window.addEventListener('DOMContentLoaded', () => {
   };
 
   document.getElementById('btn-close-details').onclick = closeDetails;
+
+  // Botón de activación directa del reproductor
+  const btnStartPlay = document.getElementById('btn-start-play');
+  if (btnStartPlay) {
+    btnStartPlay.onclick = activatePlayerFromStartPrompt;
+  }
 
   // Botones del reproductor
   document.getElementById('btn-hud-close').onclick = closePlayer;

@@ -3,11 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title>LuminaTV - Streaming para Smart TV</title>
   
   <link rel="preconnect" href="https://api.themoviedb.org" />
   <link rel="preconnect" href="https://image.tmdb.org" crossorigin />
-  <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="./style.css?v=1.0.7" />
   
   <!-- HLS.js para reproducción directa de video nativo -->
   <script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.8/dist/hls.min.js"></script>
@@ -163,6 +166,19 @@
     <!-- Iframe para Servidores Embed de Contingencia -->
     <iframe class="player-iframe" id="player-iframe" style="display: none;" allowfullscreen="true" allow="autoplay *; fullscreen *; encrypted-media *; picture-in-picture *; accelerometer; gyroscope" referrerpolicy="origin" tabindex="0"></iframe>
 
+    <!-- Overlay Inicial para Iniciar Reproducción en Smart TV (Evita bloqueo de autoplay) -->
+    <div class="player-start-overlay" id="player-start-overlay" style="display: none;">
+      <div class="player-start-card">
+        <button class="btn-start-play focusable" id="btn-start-play">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor">
+            <polygon points="5 3 19 12 5 21 5 3"/>
+          </svg>
+          <span>PULSA OK PARA REPRODUCIR</span>
+        </button>
+        <p class="player-start-hint">El control remoto conectará con el reproductor. Pulsa Flecha Arriba en cualquier momento para ver opciones.</p>
+      </div>
+    </div>
+
     <!-- OSD / HUD de Control para el televisor -->
     <div class="player-hud" id="player-hud">
       
@@ -307,7 +323,19 @@
     </div>
   </div>
 
-  <!-- Script Principal de la Aplicación -->
-  <script src="./app.js"></script>
+  <!-- Script Principal de la Aplicación con Forzado de Caché Dinámico -->
+  <script>
+    (function() {
+      var cacheBuster = '1.0.7_' + Date.now();
+      var script = document.createElement('script');
+      script.src = './app.js?v=' + cacheBuster;
+      script.onerror = function() {
+        var fallback = document.createElement('script');
+        fallback.src = './app.js';
+        document.body.appendChild(fallback);
+      };
+      document.body.appendChild(script);
+    })();
+  </script>
 </body>
 </html>

@@ -448,6 +448,70 @@ button.focusable.focused svg {
   border: none;
 }
 
+/* Overlay Inicial para Iniciar Reproducción en Smart TV */
+.player-start-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(8px);
+  z-index: 105;
+  pointer-events: auto;
+}
+
+.player-start-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  background: var(--bg-card);
+  padding: 2.25rem 3.5rem;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.85);
+  border: 2px solid var(--border-subtle);
+  animation: pulseCard 2.5s infinite ease-in-out;
+  text-align: center;
+  max-width: 650px;
+}
+
+@keyframes pulseCard {
+  0%, 100% { transform: scale(1); border-color: var(--border-subtle); }
+  50% { transform: scale(1.02); border-color: var(--accent-primary); }
+}
+
+.btn-start-play {
+  display: flex;
+  align-items: center;
+  gap: 1.15rem;
+  background: var(--accent-primary);
+  color: #ffffff;
+  border: none;
+  font-size: 1.35rem;
+  font-weight: 800;
+  padding: 1.25rem 2.75rem;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  outline: none;
+  box-shadow: 0 8px 24px rgba(2, 132, 199, 0.45);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btn-start-play:focus,
+.btn-start-play.focused {
+  background: #0284c7;
+  transform: scale(1.08);
+  box-shadow: 0 0 0 5px #ffffff, 0 12px 32px rgba(2, 132, 199, 0.7);
+}
+
+.player-start-hint {
+  color: var(--text-muted);
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
 .player-hud {
   position: absolute;
   inset: 0;
