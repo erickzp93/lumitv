@@ -51,6 +51,7 @@ test('missing videos and rejected play promises never report successful playback
 test('service discovers only this module and parses listening rather than established sockets',()=>{
   assert.equal(service.isLuminaPage('http://127.0.0.1:8081/module/gh%2Ferickzp93%2Flumitv/dist/index.html'),true);
   assert.equal(service.isLuminaPage('http://127.0.0.1:8081/module/gh%2Ferickzp93%2Flumitv@v1.1.0/dist/index.html'),true);
+  assert.equal(service.isLuminaPage('http://127.0.0.1:8081/module/gh%2Ferickzp93%2Flumitv%40v1.1.0/dist/index.html'),true);
   assert.equal(service.isLuminaPage('https://attacker.test/module/gh%2Ferickzp93%2Flumitv/dist/index.html'),false);
   assert.equal(service.isLuminaPage('http://127.0.0.1:8081/module/gh%2Fother%2Flumitv/dist/index.html'),false);
   assert.deepEqual(service.listeningPorts('header\n0: 0100007F:CBC4 00000000:0000 0A\n1: 0100007F:1F91 00000000:0000 0A\n2: 0100007F:CBC5 00000000:0000 01'),[52164]);

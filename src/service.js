@@ -19,7 +19,8 @@ var disposed = false;
 var allowed = ['status', 'play', 'pause', 'toggle', 'seek', 'unmute', 'click'];
 
 function isLuminaPage(url) {
-  return /^http:\/\/(127\.0\.0\.1|localhost):8081\/module\/(gh%2[fF]|gh\/)erickzp93(%2[fF]|\/)lumitv(?:@[^/]+)?\/dist\/index\.html(?:[?#]|$)/.test(url || '');
+  try { url = decodeURIComponent(url || ''); } catch (e) { return false; }
+  return /^http:\/\/(127\.0\.0\.1|localhost):8081\/module\/gh\/erickzp93\/lumitv(?:@[^/]+)?\/dist\/index\.html(?:[?#]|$)/.test(url);
 }
 
 function listeningPorts(text) {
