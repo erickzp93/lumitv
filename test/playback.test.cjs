@@ -75,6 +75,17 @@ test('service discovers only this module and parses listening rather than establ
   assert.equal(service.isLuminaPage('http://127.0.0.1:8081/module/gh%2Fother%2Flumitv/dist/index.html'),false);
   assert.deepEqual(service.listeningPorts('header\n0: 0100007F:CBC4 00000000:0000 0A\n1: 0100007F:1F91 00000000:0000 0A\n2: 0100007F:CBC5 00000000:0000 01'),[52164]);
 });
+test('asset URLs preserve CSS and JavaScript MIME types in the TizenBrew proxy',()=>{
+  const html=new JSDOM(fs.readFileSync('dist/index.html','utf8'));
+  // This reproduces the external TizenBrew proxy's extension inference, which
+  // treats dots inside query strings as filename extensions.
+  for(const node of html.window.document.querySelectorAll('link[rel=stylesheet],script[src]')){
+    const url=node.getAttribute('href')||node.getAttribute('src');
+    const inferred=url.split('.').pop().split('?')[0];
+    assert.equal(inferred,node.tagName==='LINK'?'css':'js',url);
+  }
+  html.window.close();
+});
 test('opening a title does not invent a clock, runtime, or saved progress',t=>{
   const {run}=app(t);
   assert.equal(run('State.currentTime'),0);assert.equal(run('State.duration'),0);

@@ -11,5 +11,6 @@
 - Reintento, cambio de servidor y salida disponibles durante una carga fallida.
 - Ratón virtual con clic dentro del frame y foco del control conservado en LuminaTV.
 - Registro remoto opcional; eliminación del envío de registros a una PC fija.
+- URLs de CSS y JavaScript compatibles con la detección MIME del proxy de TizenBrew.
 
 Requiere abrir el módulo en modo Debug de TizenBrew. Para actualizar, recarga los módulos y reinicia TizenBrew por completo. La disponibilidad de cada video y servidor depende del proveedor.
