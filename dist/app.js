@@ -6,6 +6,119 @@
 'use strict';
 
 // ============================================================================
+// Motor de Depuración en Pantalla y Telemetría Remota (TV -> PC Logger)
+// ============================================================================
+const REMOTE_LOGGER_URL = 'http://192.168.0.8:9999/log';
+
+const Debugger = {
+  enabled: false,
+  logs: [],
+  maxLogs: 50,
+
+  init() {
+    this.hookConsole();
+    this.hookErrors();
+    this.info('LuminaTV iniciada. UA: ' + navigator.userAgent);
+  },
+
+  log(category, message, data = null) {
+    const time = new Date().toTimeString().split(' ')[0];
+    const logItem = { time, category, message, data };
+    this.logs.push(logItem);
+    if (this.logs.length > this.maxLogs) this.logs.shift();
+
+    this.renderLog(logItem);
+    this.sendRemote(logItem);
+  },
+
+  info(msg, data) { this.log('info', msg, data); },
+  warn(msg, data) { this.log('warn', msg, data); },
+  error(msg, data) { this.log('error', msg, data); },
+  net(msg, data) { this.log('net', msg, data); },
+  msg(msg, data) { this.log('msg', msg, data); },
+
+  renderLog(item) {
+    const container = document.getElementById('debug-logs-container');
+    if (!container) return;
+    const el = document.createElement('div');
+    el.className = `debug-log-line log-${item.category}`;
+    el.textContent = `[${item.time}] [${item.category.toUpperCase()}] ${item.message}${item.data ? ' ' + (typeof item.data === 'object' ? JSON.stringify(item.data) : item.data) : ''}`;
+    container.appendChild(el);
+    container.scrollTop = container.scrollHeight;
+    this.updateStatusBar();
+  },
+
+  updateStatusBar() {
+    const bar = document.getElementById('debug-status-bar');
+    if (!bar) return;
+    const srv = (typeof STREAM_SERVERS !== 'undefined' && STREAM_SERVERS[State.activeServerIndex]) 
+      ? STREAM_SERVERS[State.activeServerIndex].name 
+      : 'N/A';
+    const media = State.currentMedia ? (State.currentMedia.title || State.currentMedia.name) : 'Ninguno';
+    bar.textContent = `Vista: ${State.currentView} | Media: ${media} | Servidor: ${srv} | Tiempo: ${formatTime(State.currentTime)}/${formatTime(State.duration)} | Play: ${State.isPlaying}`;
+  },
+
+  sendRemote(item) {
+    try {
+      fetch(REMOTE_LOGGER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(item)
+      }).catch(() => {});
+    } catch (e) {}
+  },
+
+  toggle() {
+    this.enabled = !this.enabled;
+    const overlay = document.getElementById('debug-overlay');
+    if (!overlay) return;
+    overlay.style.display = this.enabled ? 'flex' : 'none';
+    if (this.enabled) {
+      this.updateStatusBar();
+      showToast('Consola de Depuración (Pulsa 9 para Ocultar)');
+    } else {
+      showToast('Consola Ocultada');
+    }
+  },
+
+  clear() {
+    this.logs = [];
+    const container = document.getElementById('debug-logs-container');
+    if (container) container.innerHTML = '';
+  },
+
+  hookConsole() {
+    const origLog = console.log;
+    const origWarn = console.warn;
+    const origError = console.error;
+
+    console.log = (...args) => {
+      origLog.apply(console, args);
+      this.info(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+    };
+    console.warn = (...args) => {
+      origWarn.apply(console, args);
+      this.warn(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+    };
+    console.error = (...args) => {
+      origError.apply(console, args);
+      this.error(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+    };
+  },
+
+  hookErrors() {
+    window.addEventListener('error', (e) => {
+      this.error(`Error no controlado: ${e.message} at ${e.filename}:${e.lineno}`);
+    });
+    window.addEventListener('unhandledrejection', (e) => {
+      this.error(`Promesa rechazada: ${e.reason}`);
+    });
+  }
+};
+
+Debugger.init();
+
+// ============================================================================
 // Configuración & Constantes
 // ============================================================================
 const TMDB_API_KEY = '4ef0d7355d9ffb5151e987764708ce96';
@@ -593,6 +706,8 @@ function updateHudTimeline(currentTime, duration) {
 window.addEventListener('message', (event) => {
   if (!event.data) return;
 
+  Debugger.msg(`PostMessage de [${event.origin}]:`, event.data);
+
   if (event.data.type === 'PLAYER_EVENT' && event.data.data) {
     const payload = event.data.data;
 
@@ -683,6 +798,15 @@ function loadStream(startTime = 0) {
       ? server.tvUrl(media.id, State.selectedSeason, State.selectedEpisode, startTime)
       : server.movieUrl(media.id, startTime);
     
+    Debugger.net(`Cargando stream en iframe: [${server.name}] -> ${streamUrl}`);
+    
+    iframeEl.onload = () => {
+      Debugger.info(`Iframe cargado con éxito para ${server.name}`);
+    };
+    iframeEl.onerror = (err) => {
+      Debugger.error(`Iframe error al cargar ${server.name}:`, err);
+    };
+
     iframeEl.src = streamUrl;
     showToast(`Conectado a ${server.name}`);
   }
@@ -897,6 +1021,18 @@ document.addEventListener('keydown', (e) => {
     }
   }
 
+  // Tecla '0' del control para alternar ratón virtual en el reproductor
+  if (keyCode === 48 && State.currentView === 'player') {
+    toggleVirtualCursor();
+    return;
+  }
+
+  // Tecla '9' o Info para alternar Consola de Depuración
+  if (keyCode === 57 || keyCode === 457 || keyCode === 458 || key === 'Info' || key === 'Guide') {
+    Debugger.toggle();
+    return;
+  }
+
   // Teclas de Dirección D-Pad
   switch (keyCode) {
     case 37: // Izquierda
@@ -920,11 +1056,6 @@ document.addEventListener('keydown', (e) => {
         clickVirtualCursor();
       } else if (State.currentFocusedElement) {
         State.currentFocusedElement.click();
-      }
-      break;
-    case 48: // Tecla '0' del control para alternar ratón virtual en el reproductor
-      if (State.currentView === 'player') {
-        toggleVirtualCursor();
       }
       break;
   }
@@ -968,6 +1099,19 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     };
   }
+
+  // Botones de depuración
+  const btnDebugToggle = document.getElementById('btn-debug-toggle');
+  if (btnDebugToggle) btnDebugToggle.onclick = () => Debugger.toggle();
+
+  const btnHudDebug = document.getElementById('btn-hud-debug');
+  if (btnHudDebug) btnHudDebug.onclick = () => Debugger.toggle();
+
+  const btnDebugClear = document.getElementById('btn-debug-clear');
+  if (btnDebugClear) btnDebugClear.onclick = () => Debugger.clear();
+
+  const btnDebugClose = document.getElementById('btn-debug-close');
+  if (btnDebugClose) btnDebugClose.onclick = () => Debugger.toggle();
 
   // Menú superior navegación
   document.getElementById('nav-home').onclick = () => {
