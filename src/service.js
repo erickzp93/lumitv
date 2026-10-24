@@ -84,6 +84,7 @@ function mediaCommand(command) {
   if (!video || (command.action !== 'status' && video.readyState === 0)) return Promise.resolve({error:'VIDEO_NOT_READY'});
   var action = command.action;
   if (action === 'toggle') action = video.paused ? 'play' : 'pause';
+  if (action === 'play' && video.readyState < 2) return Promise.resolve({error:'VIDEO_NOT_READY'});
   if (action === 'play' || action === 'unmute') {
     video.muted = false;
     video.defaultMuted = false;
@@ -111,8 +112,12 @@ function sendToApp(method, data) {
 }
 
 function locate() {
+  var videoFrameId = null;
   return call('Page.getFrameTree').then(function(result) {
     var frameId = result.frameTree.frame.id;
+    (result.frameTree.childFrames || []).forEach(function(child) {
+      if (child.frame.name === 'lumina-player') videoFrameId = child.frame.id;
+    });
     mainContext = null;
     Object.keys(contexts).forEach(function(id) {
       if (contexts[id] === frameId) mainContext = Number(id);
@@ -125,19 +130,12 @@ function locate() {
       call('Runtime.addBinding', {name:BINDING, executionContextId:mainContext}).then(function() { registeredContext = mainContext; });
     return bind.then(function() { return sendToApp('ready', {version:VERSION}); }).then(function() {
       if (metadata.view !== 'player') return {metadata:metadata, contextId:null};
-      return call('DOM.getDocument', {depth:0}).then(function(document) {
-        return call('DOM.querySelector', {nodeId:document.root.nodeId, selector:'#player-iframe'});
-      }).then(function(node) {
-        if (!node.nodeId) throw new Error('VIDEO_NOT_READY');
-        return call('DOM.describeNode', {nodeId:node.nodeId});
-      }).then(function(result) {
-        var contextId = null;
-        Object.keys(contexts).forEach(function(id) {
-          if (contexts[id] === result.node.frameId) contextId = Number(id);
-        });
-        if (contextId === null) throw new Error('VIDEO_NOT_READY');
-        return {metadata:metadata, contextId:contextId};
+      var contextId = null;
+      Object.keys(contexts).forEach(function(id) {
+        if (videoFrameId !== null && contexts[id] === videoFrameId) contextId = Number(id);
       });
+      if (contextId === null) throw new Error('VIDEO_NOT_READY');
+      return {metadata:metadata, contextId:contextId};
     });
   });
 }
@@ -163,7 +161,8 @@ function onBinding(params) {
     result.id = command.id;
     return sendToApp('receive', result);
   }).catch(function(error) {
-    return sendToApp('receive', {id:command.id, session:command.session, error:error.message}).catch(function() {});
+    var message = /Cannot find context|context.*destroyed|Cannot find.*execution context/i.test(error.message) ? 'VIDEO_NOT_READY' : error.message;
+    return sendToApp('receive', {id:command.id, session:command.session, error:message}).catch(function() {});
   });
 }
 
