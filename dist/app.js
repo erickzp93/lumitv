@@ -832,6 +832,10 @@ async function activatePlayerFromStartPrompt() {
       try {
         const sample = await window.LuminaBridge.request('play', {startAt:State.resumeAt, volume:0.5});
         if (!sample || sample.paused) throw new Error('VIDEO_NOT_READY');
+        await new Promise(resolve => setTimeout(resolve, 600));
+        if (State.playerSession !== session) return;
+        const confirmed = await window.LuminaBridge.request('status');
+        if (confirmed.paused || confirmed.readyState < 2 || confirmed.currentTime <= sample.currentTime) throw new Error('VIDEO_NOT_READY');
         if (State.playerSession !== session) return;
         document.getElementById('player-start-overlay').style.display = 'none';
         setFocus(document.getElementById('btn-hud-playpause'));

@@ -2698,7 +2698,7 @@ function call(method, params) {
     var timer = setTimeout(function () {
       delete pending[id];
       reject(new Error("COMMAND_TIMEOUT"));
-    }, 5e3);
+    }, 2e4);
     pending[id] = {
       resolve,
       reject,
@@ -2769,8 +2769,6 @@ function mediaCommand(command) {
   });
   if (action === "play" || action === "unmute") {
     var volume = typeof command.volume === "number" ? Math.max(0, Math.min(1, command.volume)) : 0.5;
-    request("media-volume-change-request", volume);
-    request("media-unmute-request");
     video.muted = false;
     video.defaultMuted = false;
     video.volume = volume;
@@ -2778,14 +2776,10 @@ function mediaCommand(command) {
   if (action === "play" && typeof command.startAt === "number" && Math.abs(video.currentTime - command.startAt) > 0.5) {
     seek(command.startAt);
   }
-  if (action === "pause") {
-    request("media-pause-request");
-    video.pause();
-  }
+  if (action === "pause") video.pause();
   if (action === "seek") seek(video.currentTime + command.seconds);
   if (action === "play") {
     try {
-      request("media-play-request");
       return Promise.resolve(video.play()).then(snapshot, function (error) {
         return {
           error: error.name + ": " + error.message

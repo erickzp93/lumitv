@@ -27,7 +27,7 @@ window.LuminaBridge = {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(new Error('COMMAND_TIMEOUT'));
-      }, 8000);
+      }, 22000);
       this.pending.set(id, {resolve, reject, timer, session});
       try { window.__luminaNative(JSON.stringify({...options, id, session, action})); }
       catch (error) {
